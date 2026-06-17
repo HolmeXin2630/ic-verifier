@@ -8,6 +8,8 @@
 - Parameters: `UPPER_SNAKE_CASE` (`ADDR_WIDTH`, `DATA_WIDTH`)
 - Methods: `snake_case` (`send_request`, `check_response`)
 - Files: one class per file, filename matches class name (`my_driver.sv`)
+- Interfaces: `snake_case_if` suffix (`apb_if`, `axi_if`)
+- Packages: `snake_case_pkg` suffix (`apb_pkg`, `my_lib_pkg`)
 
 ## Code Organization
 
@@ -16,13 +18,281 @@
 - Class order: parameters → properties → constraints → methods → extern methods
 - One class per file unless tightly coupled inner classes
 
+## SV Language Style Rules
+
+### Data Types
+
+```systemverilog
+// ✅ DO: Use logic for all 4-state signals (RTL and verification)
+logic [7:0] data;
+
+// ✅ DO: Use 2-state types for performance-critical counters/indices
+int unsigned transaction_count;
+bit [31:0] cycle_counter;
+
+// ❌ DON'T: Use reg — it's legacy, use logic instead
+reg [7:0] data;  // WRONG
+
+// ✅ DO: Use enum for named states/commands
+typedef enum logic [1:0] {
+    IDLE   = 2'b00,
+    SETUP  = 2'b01,
+    ACCESS = 2'b10,
+    ERROR  = 2'b11
+} apb_state_e;
+
+// ❌ DON'T: Use magic numbers — always use enums or parameters
+if (state == 2'b01) // WRONG — use SETUP instead
+```
+
+### Procedural Blocks
+
+```systemverilog
+// ✅ DO: Use always_ff for sequential logic
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)
+        data <= '0;
+    else
+        data <= next_data;
+end
+
+// ✅ DO: Use always_comb for combinational logic
+always_comb begin
+    next_data = data;
+    if (en)
+        next_data = data_in;
+end
+
+// ❌ DON'T: Use always_latch unless explicitly intended — it hides bugs
+// If you must use it, add a comment explaining why
+always_latch begin // Intentional latch for low-power domain
+    if (en) q <= d;
+end
+
+// ❌ DON'T: Use always @(*) — use always_comb instead
+always @(*) begin // WRONG — use always_comb
+```
+
+### Blocking vs Non-blocking Assignments
+
+```systemverilog
+// ✅ DO: Non-blocking (<=) in sequential blocks
+always_ff @(posedge clk) begin
+    q <= d;
+end
+
+// ✅ DO: Blocking (=) in combinational blocks
+always_comb begin
+    temp = a & b;
+    result = temp | c;
+end
+
+// ❌ DON'T: Mix blocking and non-blocking in the same block
+always_ff @(posedge clk) begin
+    temp = a & b;   // WRONG — blocking in sequential
+    q <= temp;
+end
+```
+
+### Loop Idioms
+
+```systemverilog
+// ✅ DO: Use foreach for array iteration
+foreach (items[i]) begin
+    items[i].addr = base_addr + (i * 4);
+end
+
+// ✅ DO: Use for with explicit bounds for directed iteration
+for (int i = 0; i < NUM_REGS; i++) begin
+    reg_array[i] = '0;
+end
+
+// ❌ DON'T: Use while(true) — use a bounded loop or forever with disable
+// ✅ DO: Use forever with a named block for disable
+forever begin : main_loop
+    @(posedge clk);
+    if (done) disable main_loop;
+end
+```
+
+### Case Statements
+
+```systemverilog
+// ✅ DO: Use unique case for mutually exclusive conditions
+unique case (state)
+    IDLE:   next = SETUP;
+    SETUP:  next = ACCESS;
+    ACCESS: next = IDLE;
+endcase
+
+// ✅ DO: Use priority case when overlap is expected
+priority casez ({a, b, c})
+    3'b1??: result = 1;
+    3'b01?: result = 2;
+    3'b001: result = 3;
+endcase
+```
+
+## Class Design Rules
+
+### Virtual and Abstract Classes
+
+```systemverilog
+// ✅ DO: Use virtual class for abstract base classes
+virtual class base_driver extends uvm_driver;
+    pure virtual task drive_item(uvm_sequence_item item);
+endclass
+
+// ✅ DO: Use interface class for contracts
+interface class reset_handler;
+    pure virtual function void handle_reset();
+endclass
+
+// ✅ DO: Use concrete class with virtual methods for extensible components
+class my_driver extends base_driver;
+    virtual task drive_item(uvm_sequence_item item);
+        // concrete implementation
+    endtask
+endclass
+```
+
+### Visibility Policy
+
+```systemverilog
+class my_agent extends uvm_agent;
+    // ✅ DO: Use local for truly internal state
+    local int unsigned outstanding_count;
+
+    // ✅ DO: Use protected when subclasses need access
+    protected uvm_analysis_port#(my_transaction) analysis_port;
+
+    // ✅ DO: Use public (default) for user-facing API
+    my_config cfg;
+
+    // ❌ DON'T: Make everything public — hide implementation details
+endclass
+```
+
+### Copy and Clone Policy
+
+```systemverilog
+// ✅ DO: Implement do_copy for all sequence items
+class my_transaction extends uvm_sequence_item;
+    rand bit [31:0] addr;
+    rand bit [31:0] data;
+
+    `uvm_object_utils_begin(my_transaction)
+        `uvm_field_int(addr, UVM_ALL_ON)
+        `uvm_field_int(data, UVM_ALL_ON)
+    `uvm_object_utils_end
+
+    // ✅ DO: Override do_copy for deep copy of object members
+    virtual function void do_copy(uvm_object rhs);
+        my_transaction rhs_cast;
+        super.do_copy(rhs);
+        $cast(rhs_cast, rhs);
+        // Deep copy any object members here
+    endfunction
+endclass
+```
+
 ## UVM Conventions
 
-- Factory registration: always use `uvm_component_utils` / `uvm_object_utils`
-- Config_db: use type-safe `get`/`set` with explicit type casting
-- Phase: override only phases you need, call `super.phase_name()` first
-- Objection: raise/drop in sequence, not in driver/monitor
-- TLM: use `uvm_analysis_port` for broadcast, `uvm_*_port` for point-to-point
+### Factory Registration
+
+```systemverilog
+// ✅ DO: Always register with factory
+class my_driver extends uvm_driver#(my_transaction);
+    `uvm_component_utils(my_driver)
+endclass
+
+// ❌ DON'T: Instantiate with new() directly — use factory create
+my_driver drv = new("drv", this);  // WRONG
+my_driver drv;                      // CORRECT
+drv = my_driver::type_id::create("drv", this);
+```
+
+### Config_db Usage
+
+```systemverilog
+// ✅ DO: Use type-safe get/set with explicit type
+virtual interface apb_if vif;
+if (!uvm_config_db#(virtual apb_if)::get(this, "", "vif", vif))
+    `uvm_fatal("NOVIF", "Virtual interface not set")
+
+// ❌ DON'T: Use wildcard or string-based get without type
+uvm_config_db#(virtual apb_if)::get(null, "*", "vif", vif);  // WRONG
+
+// ✅ DO: Set in parent's build_phase, get in child's build_phase
+// Parent:
+uvm_config_db#(int)::set(this, "agent*", "num_masters", 4);
+// Child:
+if (!uvm_config_db#(int)::get(this, "", "num_masters", num_masters))
+    `uvm_fatal("CFG", "num_masters not configured")
+```
+
+### Phase Handling
+
+```systemverilog
+// ✅ DO: Call super first in phase overrides
+virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    // Your code here
+endfunction
+
+// ✅ DO: Only override phases you actually use
+// ❌ DON'T: Override all phases "just in case"
+
+// ✅ DO: Use build_phase for configuration and component creation
+// ✅ DO: Use connect_phase for TLM port connections
+// ✅ DO: Use run_phase for main stimulus/checking activity
+```
+
+### Objection Handling
+
+```systemverilog
+// ✅ DO: Raise/drop objection in sequences
+class my_sequence extends uvm_sequence#(my_transaction);
+    virtual task body();
+        phase.raise_objection(this);
+        // ... generate transactions ...
+        phase.drop_objection(this);
+    endtask
+endclass
+
+// ❌ DON'T: Raise/drop objection in driver or monitor
+// Driver is a slave — it doesn't decide when testing is done
+
+// ✅ DO: Use drain time in test for pending transactions
+virtual function void phase_ready_to_end(uvm_phase phase);
+    if (phase.is(uvm_run_phase::get())) begin
+        phase.raise_objection(this);
+        fork
+            begin
+                #100ns; // drain time
+                phase.drop_objection(this);
+            end
+        join_none
+    end
+endfunction
+```
+
+### TLM Port Usage
+
+```systemverilog
+// ✅ DO: Use analysis_port for broadcast (monitor → scoreboard/coverage)
+uvm_analysis_port#(my_transaction) ap;
+
+// ✅ DO: Use seq_item_port for driver (driver ↔ sequencer)
+seq_item_port.get_next_item(req);
+// ... drive ...
+seq_item_port.item_done(rsp);
+
+// ✅ DO: Use put_port for one-way push (driver → monitor for expected data)
+uvm_put_port#(my_transaction) expected_port;
+
+// ❌ DON'T: Use blocking put in a non-blocking context
+```
 
 ## Comments
 
@@ -33,7 +303,118 @@
 
 ## Error Handling
 
-- Use `uvm_report_*` for all messages, never `$display`
-- Set appropriate verbosity levels: `UVM_LOW` for key events, `UVM_HIGH` for debug
-- Use `uvm_fatal` only for unrecoverable errors
-- Use `uvm_error` for test failures, `uvm_warning` for recoverable issues
+```systemverilog
+// ✅ DO: Use uvm_report_* for all messages
+`uvm_info("TAG", $sformatf("Received: %s", item.convert2string()), UVM_HIGH)
+`uvm_warning("TAG", "Unexpected response")
+`uvm_error("TAG", $sformatf("Mismatch: expected=0x%h, got=0x%h", exp, act))
+`uvm_fatal("NOVIF", "Virtual interface not configured")
+
+// ❌ DON'T: Use $display, $write, $monitor
+$display("Received: %h", data);  // WRONG
+
+// Verbosity guidelines:
+// UVM_NONE  — always printed (fatal/error)
+// UVM_LOW   — key milestones (test start/end, major events)
+// UVM_MEDIUM — normal operational info
+// UVM_HIGH  — detailed debug info
+// UVM_FULL  — very verbose, per-transaction detail
+// UVM_DEBUG — extreme verbosity, rarely used
+```
+
+## Anti-Patterns
+
+### ❌ Wildcard config_db Get
+
+```systemverilog
+// WRONG — matches anything, fragile
+uvm_config_db#(int)::get(null, "*", "timeout", timeout);
+
+// CORRECT — explicit scope
+uvm_config_db#(int)::get(this, "", "timeout", timeout);
+```
+
+### ❌ Doing Work in new()
+
+```systemverilog
+// WRONG — factory overrides won't affect objects created in new()
+function new(string name, uvm_component parent);
+    super.new(name, parent);
+    drv = my_driver::type_id::create("drv", this);  // WRONG
+endfunction
+
+// CORRECT — create components in build_phase
+virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    drv = my_driver::type_id::create("drv", this);
+endfunction
+```
+
+### ❌ Hard-coded Delays in Driver
+
+```systemverilog
+// WRONG — not reusable, not debuggable
+task drive_item(my_transaction item);
+    vif.cb.addr <= item.addr;
+    #10ns;  // WRONG
+    vif.cb.data <= item.data;
+endtask
+
+// CORRECT — use events or protocol-level timing
+task drive_item(my_transaction item);
+    vif.cb.addr <= item.addr;
+    @(vif.cb);  // Wait for clock edge
+    vif.cb.data <= item.data;
+endtask
+```
+
+### ❌ Mixed Combinational and Sequential Logic
+
+```systemverilog
+// WRONG — hidden latch, hard to verify
+always_ff @(posedge clk) begin
+    if (en)
+        data <= next_data;
+    result = data & mask;  // WRONG — blocking in sequential block
+end
+```
+
+## Parameterization Policy
+
+```systemverilog
+// ✅ DO: Use SV parameters for structural properties (never change at runtime)
+class apb_agent#(int ADDR_WIDTH = 32, int DATA_WIDTH = 32) extends uvm_agent;
+    // ADDR_WIDTH and DATA_WIDTH are compile-time constants
+endclass
+
+// ✅ DO: Use config_db for behavioral configuration (may change per test)
+class my_driver extends uvm_driver;
+    int unsigned timeout_cycles;  // Set via config_db
+    bit enable_coverage;          // Set via config_db
+endclass
+
+// ✅ DO: Use factory overrides for type substitution
+// In test:
+my_driver::type_id::set_type_override(slow_driver::get_type());
+```
+
+## Assertion and Checker Style
+
+```systemverilog
+// ✅ DO: Use concurrent assertions for protocol checks
+property apb_stable_addr;
+    @(posedge clk) psel && !penable |-> $stable(paddr);
+endproperty
+assert property (apb_stable_addr)
+    else `uvm_error("APB_CHK", "Address changed during access phase")
+
+// ✅ DO: Use immediate assertions for precondition checks
+task drive_item(my_transaction item);
+    assert (item != null) else `uvm_fatal("NULL", "Null transaction")
+    // ...
+endtask
+
+// ❌ DON'T: Use immediate assertions in always blocks (race condition risk)
+// ✅ DO: Name your properties for traceability
+// ✅ DO: Use `uvm_error` in assertion action blocks (not $error)
+```

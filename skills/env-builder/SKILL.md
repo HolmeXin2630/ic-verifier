@@ -147,6 +147,8 @@ Read `~/.claude/skills/ic-verifier/knowledge/review-framework.md`.
 
 Review the implementation against:
 - `~/.claude/skills/ic-verifier/knowledge/coding-standards.md`
+- `~/.claude/skills/ic-verifier/knowledge/uvc-construction.md` (for UVC/agent/driver/monitor patterns)
+- `~/.claude/skills/ic-verifier/knowledge/design-patterns.md` (for factory/config_db/TLM/reset patterns)
 - The spec produced in Step 3
 - The verification strategy from Step 5
 
@@ -259,10 +261,14 @@ Read the target files and any available spec/documentation.
 
 Read `~/.claude/skills/ic-verifier/knowledge/review-framework.md`.
 Read `~/.claude/skills/ic-verifier/knowledge/coding-standards.md`.
+Read `~/.claude/skills/ic-verifier/knowledge/uvc-construction.md`.
+Read `~/.claude/skills/ic-verifier/knowledge/design-patterns.md`.
 
 Review the code against:
 - UVM methodology correctness
 - Coding standards
+- UVC construction patterns (agent/driver/monitor/sequencer/transaction design)
+- Design patterns (factory, config_db, TLM, reset, objection, scoreboard)
 - API design
 - Verification completeness (if test files are available)
 
@@ -281,4 +287,6 @@ Before reporting done, verify:
 - [ ] Review verdict is `pass` or `pass-with-nits`
 - [ ] No blocking findings remain
 - [ ] Code follows `~/.claude/skills/ic-verifier/knowledge/coding-standards.md`
+- [ ] UVC construction follows `~/.claude/skills/ic-verifier/knowledge/uvc-construction.md`
+- [ ] Design patterns follow `~/.claude/skills/ic-verifier/knowledge/design-patterns.md`
 - [ ] Non-runnable gaps honestly reported (if applicable)
