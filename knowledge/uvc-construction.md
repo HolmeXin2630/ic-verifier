@@ -2,22 +2,31 @@
 
 ## UVC Anatomy
 
-A UVC (UVM Verification Component) is a self-contained, reusable verification unit for a specific protocol or interface. The canonical structure:
+A UVC (UVM Verification Component) is a self-contained, reusable verification unit for a specific protocol or interface.
 
-```
-my_uvc/
-├── my_uvc_pkg.sv           ← Package: imports, includes, exports
-├── my_transaction.sv        ← Sequence item (data model)
-├── my_config.sv             ← Configuration object
-├── my_driver.sv             ← Drives signals via virtual interface
-├── my_monitor.sv            ← Observes signals, emits transactions
-├── my_sequencer.sv          ← Arbitrates sequences
-├── my_sequence.sv           ← Stimulus generation library
-├── my_agent.sv              ← Top-level container (agent)
-├── my_coverage.sv           ← Functional coverage collector
-├── my_scoreboard.sv         ← Optional: protocol-level checking
-└── my_if.sv                 ← SystemVerilog interface
-```
+**Canonical template:** [uvc_gen/templates](https://github.com/HolmeXin2630/uvc_gen/tree/master/templates/default)
+
+Not every UVC needs all components. Pick what you need based on scope:
+
+| Component | Required? | When to include |
+|-----------|-----------|-----------------|
+| transaction | Always | Data model for the protocol |
+| config | Always | Agent/env behavior configuration |
+| driver | Active agent | Drives signals via virtual interface |
+| monitor | Always | Observes signals, emits transactions |
+| sequencer | Active agent | Arbitrates sequences |
+| seq_lib | If has sequences | Stimulus generation library |
+| agent | Always | Top-level container for driver/monitor/sequencer |
+| environment | Multi-agent | Wraps agents, scoreboard, ref_model |
+| environment_cfg | Multi-agent | Agent count, enable flags |
+| coverage | If tracking coverage | Functional coverage collector |
+| scoreboard | If checking results | Transaction comparison |
+| ref_model | If checking results | Reference model for expected data |
+| interface | Always | SystemVerilog interface |
+
+### Master/Slave Variant
+
+For protocols with master and slave roles (AXI, AHB), use [uvc_gen_mstslv template](https://github.com/HolmeXin2630/uvc_gen/tree/master/templates/default/xxx_uvc_mstslv) — separate agent/driver/monitor/sequencer per role.
 
 ### TLM Topology
 
@@ -168,7 +177,9 @@ endclass
 
 ## Driver Cookbook
 
-### Standard run_phase Loop
+### Standard Structure
+
+Reference: [uvc_gen driver template](https://github.com/HolmeXin2630/uvc_gen/blob/master/templates/default/xxx_uvc/xxx_driver.sv)
 
 ```systemverilog
 class my_driver extends uvm_driver#(my_transaction);
@@ -177,66 +188,62 @@ class my_driver extends uvm_driver#(my_transaction);
     virtual my_if vif;
     my_config cfg;
 
-    function new(string name, uvm_component parent);
-        super.new(name, parent);
-    endfunction
-
-    virtual function void build_phase(uvm_phase phase);
-        super.build_phase(phase);
-        if (!uvm_config_db#(virtual my_if)::get(this, "", "vif", vif))
-            `uvm_fatal("NOVIF", "Virtual interface not configured")
-        if (!uvm_config_db#(my_config)::get(this, "", "cfg", cfg))
-            `uvm_fatal("NOCFG", "Config not set")
-    endfunction
-
-    virtual task run_phase(uvm_phase phase);
-        // ✅ DO: Wait for reset before starting
-        @(posedge vif.rst_n);
-
-        forever begin
-            my_transaction req;
-
-            // ✅ DO: Get transaction from sequencer
-            seq_item_port.get_next_item(req);
-
-            // ✅ DO: Drive the transaction
-            drive_item(req);
-
-            // ✅ DO: Signal completion
-            seq_item_port.item_done();
-        end
-    endtask
-
-    // ✅ DO: Separate driving logic into its own task
-    protected virtual task drive_item(my_transaction item);
-        `uvm_info("DRV", $sformatf("Driving: %s", item.convert2string()), UVM_HIGH)
-
-        // Setup phase
-        vif.cb.psel    <= 1'b1;
-        vif.cb.penable <= 1'b0;
-        vif.cb.paddr   <= item.addr;
-        vif.cb.pwrite  <= (item.direction == APB_WRITE);
-        vif.cb.pwdata  <= item.data;
-        @(vif.cb);
-
-        // Access phase
-        vif.cb.penable <= 1'b1;
-        @(vif.cb);
-
-        // Wait for ready
-        while (!vif.cb.pready) @(vif.cb);
-
-        // Capture response
-        item.rdata  = vif.cb.prdata;
-        item.slverr = vif.cb.pslverr;
-
-        // Deassert
-        vif.cb.psel    <= 1'b0;
-        vif.cb.penable <= 1'b0;
-        @(vif.cb);
-    endtask
+    extern function new(string name = "my_driver", uvm_component parent = null);
+    extern virtual function void build_phase(uvm_phase phase);
+    extern virtual protected task get_and_drive();
+    extern virtual protected task drive_trans(my_transaction trans);
+    extern virtual task run();
 endclass
+
+function my_driver::new(string name = "my_driver", uvm_component parent = null);
+    super.new(name, parent);
+endfunction
+
+function void my_driver::build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    vif = cfg.vif;  // VIF from config, not config_db
+endfunction
+
+// Reset-aware main loop
+task my_driver::run();
+    fork begin
+        forever begin
+            fork
+                begin
+                    @(posedge vif.rst_n);
+                    vif.reset_driver_signal();  // Reset cleanup in interface
+                    get_and_drive();
+                end
+                begin
+                    @(negedge vif.rst_n);
+                end
+            join_any
+            disable fork;
+        end
+    end join
+endtask
+
+// Standard get_next_item loop
+task my_driver::get_and_drive();
+    forever begin
+        seq_item_port.get_next_item(req);
+        drive_trans(req);
+        seq_item_port.item_done();
+    end
+endtask
+
+// Protocol-specific driving (override per protocol)
+task my_driver::drive_trans(my_transaction trans);
+    // Protocol-specific implementation
+endtask
 ```
+
+### Key Patterns
+
+- **VIF from config:** `vif = cfg.vif` in `build_phase` — config_db get is done by agent, not driver
+- **`run()` not `run_phase`:** Agent calls `run()` from its `run_phase`, allowing per-agent lifecycle control
+- **`vif.reset_driver_signal()`:** Reset cleanup logic lives in interface module, not in driver
+- **`extern` declarations:** Declare in class body, implement outside — improves readability
 
 ### Reset Handling Pattern
 
@@ -289,80 +296,66 @@ endtask
 
 ## Monitor Cookbook
 
-### Observable-Only Policy
+### Standard Structure
+
+Reference: [uvc_gen monitor template](https://github.com/HolmeXin2630/uvc_gen/blob/master/templates/default/xxx_uvc/xxx_monitor.sv)
 
 ```systemverilog
 class my_monitor extends uvm_monitor;
     `uvm_component_utils(my_monitor)
 
     virtual my_if vif;
-    uvm_analysis_port#(my_transaction) ap;
+    my_config cfg;
+    uvm_analysis_port#(my_transaction) broadcaster;
 
-    function new(string name, uvm_component parent);
-        super.new(name, parent);
-    endfunction
-
-    virtual function void build_phase(uvm_phase phase);
-        super.build_phase(phase);
-        ap = new("ap", this);
-        if (!uvm_config_db#(virtual my_if)::get(this, "", "vif", vif))
-            `uvm_fatal("NOVIF", "Virtual interface not configured")
-    endfunction
-
-    virtual task run_phase(uvm_phase phase);
-        // ✅ DO: Monitor is purely observational — never drives signals
-        forever begin
-            my_transaction item;
-            collect_transaction(item);
-            if (item != null) begin
-                `uvm_info("MON", $sformatf("Observed: %s", item.convert2string()), UVM_HIGH)
-                ap.write(item);
-            end
-        end
-    endtask
-
-    // ✅ DO: Extract transaction from signal-level protocol
-    protected virtual task collect_transaction(output my_transaction item);
-        // Wait for transaction start
-        @(posedge vif.clk iff (vif.psel && !vif.penable));
-
-        item = my_transaction::type_id::create("item");
-        item.addr = vif.paddr;
-        item.direction = vif.pwrite ? APB_WRITE : APB_READ;
-
-        // Wait for access phase
-        @(posedge vif.clk iff vif.penable);
-
-        // Wait for completion
-        while (!vif.pready) @(posedge vif.clk);
-
-        item.rdata  = vif.prdata;
-        item.slverr = vif.pslverr;
-    endtask
+    extern function new(string name = "my_monitor", uvm_component parent = null);
+    extern virtual function void build_phase(uvm_phase phase);
+    extern virtual task run();
+    extern virtual task rcv_data_phase();
 endclass
-```
 
-### Reset Mid-Transaction
+function my_monitor::new(string name = "my_monitor", uvm_component parent = null);
+    super.new(name, parent);
+    broadcaster = new("broadcaster", this);  // Created in new(), not build_phase
+endfunction
 
-```systemverilog
-// ✅ DO: Handle reset gracefully in monitor
-protected virtual task collect_transaction(output my_transaction item);
+function void my_monitor::build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    vif = cfg.vif;  // VIF from config
+endfunction
+
+// Reset-aware main loop (same pattern as driver)
+task my_monitor::run();
     fork begin
-        fork
-            begin
-                // Normal collection
-                collect_signals(item);
-            end
-            begin
-                // Reset detection
-                @(negedge vif.rst_n);
-                item = null;  // Discard incomplete transaction
-            end
-        join_any
-        disable fork;
+        forever begin
+            fork
+                begin
+                    @(posedge vif.mrst_n);
+                    rcv_data_phase();
+                end
+                begin
+                    @(negedge vif.mrst_n);
+                end
+            join_any
+            disable fork;
+        end
     end join
 endtask
+
+// Protocol-specific monitoring (override per protocol)
+task my_monitor::rcv_data_phase();
+    fork
+        // Protocol-specific collection loop
+    join
+endtask
 ```
+
+### Key Patterns
+
+- **`broadcaster` not `ap`:** Analysis port named `broadcaster`, created in `new()`
+- **`run()` not `run_phase`:** Same reset-aware pattern as driver
+- **`rcv_data_phase()`:** Separate task for protocol-specific monitoring, called after reset deasserts
+- **Observable-only:** Monitor never drives signals — purely observational
 
 ## Sequencer Cookbook
 
@@ -399,44 +392,17 @@ endtask
 // ❌ DON'T: Use lock/grab for normal sequences — they block other traffic
 ```
 
-### Virtual Sequencer Pattern
+### Multi-UVC Coordination (sqr_pool)
 
-```systemverilog
-// ✅ DO: Use virtual sequencer for multi-UVC coordination
-class virtual_sequencer extends uvm_sequencer;
-    `uvm_component_utils(virtual_sequencer)
+**Do NOT use virtual_sequencer.** Use sqr_pool pattern instead.
 
-    // References to sub-sequencers
-    apb_sequencer  apb_sqr;
-    axi_sequencer  axi_sqr;
+See `~/.claude/skills/ic-verifier/knowledge/design-patterns.md` → "Virtual Sequence Pattern (Sequencer Pool)" for full details.
 
-    function new(string name, uvm_component parent);
-        super.new(name, parent);
-    endfunction
-endclass
-
-// Virtual sequence coordinates multiple UVCs
-class my_virtual_sequence extends uvm_sequence;
-    `uvm_object_utils(my_virtual_sequence)
-
-    virtual_sequencer v_sqr;
-
-    virtual task body();
-        fork
-            begin
-                // APB traffic
-                apb_sequence apb_seq = apb_sequence::type_id::create("apb_seq");
-                apb_seq.start(v_sqr.apb_sqr);
-            end
-            begin
-                // AXI traffic
-                axi_sequence axi_seq = axi_sequence::type_id::create("axi_seq");
-                axi_seq.start(v_sqr.axi_sqr);
-            end
-        join
-    endtask
-endclass
-```
+Summary:
+1. Agent implements `get_sequencer()` to return its sequencer handle
+2. Environment implements `store_sequencers()` to add handles to global sqr_pool
+3. Virtual sequence extends `vseq_base` which calls `set_sqr_handles()` to retrieve handles from pool
+4. No virtual_sequencer component needed
 
 ## Sequence Library
 
@@ -450,11 +416,9 @@ class my_base_sequence extends uvm_sequence#(my_transaction);
         super.new(name);
     endfunction
 
-    // ✅ DO: Raise/drop objection in body()
+    // ✅ DO: Pure stimulus — no objection (parent vseq controls lifecycle)
     virtual task body();
-        phase.raise_objection(this);
         // ... stimulus ...
-        phase.drop_objection(this);
     endtask
 endclass
 ```
@@ -465,6 +429,7 @@ endclass
 class my_directed_sequence extends my_base_sequence;
     `uvm_object_utils(my_directed_sequence)
 
+    // Protocol-specific target fields
     rand bit [31:0] target_addr;
     rand bit [31:0] target_data;
 
@@ -473,7 +438,6 @@ class my_directed_sequence extends my_base_sequence;
         `uvm_do_with(item, {
             item.addr == target_addr;
             item.data == target_data;
-            item.direction == APB_WRITE;
         })
     endtask
 endclass
@@ -510,16 +474,24 @@ class my_error_sequence extends my_base_sequence;
 
     virtual task body();
         my_transaction item;
-        forever begin
-            `uvm_do_with(item, {
-                if (error_rate > $urandom_range(0, 99)) {
-                    item.addr[1:0] != 2'b00;  // Misaligned access
-                }
-            })
-        end
+        // Disable normal constraints for error injection
+        item = my_transaction::type_id::create("item");
+        item.c_normal.constraint_mode(0);
+        // ... randomize with error-specific constraints ...
     endtask
 endclass
 ```
+
+### Typical Sequence Types Per Protocol
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| Random | Broad coverage | Random addr/data/direction |
+| Directed | Targeted tests | Specific register read/write |
+| Back-to-back | Timing stress | Zero-delay transactions |
+| Error injection | Robustness | Protocol violations, misalignment |
+| Burst | Throughput | Multi-beat transfers |
+| Reset recovery | Resilience | Traffic after mid-transaction reset |
 
 ## Config Object Design
 
@@ -604,7 +576,7 @@ class my_coverage extends uvm_subscriber#(my_transaction);
             bins secure = {APB_SECURE};
         }
 
-        cx_dir_addr: cross cp_direction, cp_addr_range;
+        crs_dir_addr: cross cp_direction, cp_addr_range;
     endgroup
 
     function new(string name, uvm_component parent);
@@ -698,30 +670,10 @@ endpackage
 
 1. **Transaction first** — no UVM component dependencies
 2. **Config second** — may reference transaction types
-3. **Sequences third** — depend on transaction
-4. **Driver, Monitor, Coverage** — depend on transaction and config
-5. **Sequencer** — depends on transaction
-6. **Agent last** — depends on all above
-
-### Export Guidelines
-
-```systemverilog
-// ✅ DO: Export only what users need
-package my_uvc_pkg;
-    // Export transaction type
-    export my_transaction;
-
-    // Export config type
-    export my_config;
-
-    // Export agent type
-    export my_agent;
-
-    // Export common sequences
-    export my_random_sequence;
-    export my_directed_sequence;
-
-    // ❌ DON'T: Export driver, monitor, sequencer internals
-    // These are implementation details, not public API
-endpackage
-```
+3. **Sequencer third** — depends on transaction
+4. **Driver fourth** — depends on transaction, config
+5. **Monitor fifth** — depends on transaction
+6. **Agent sixth** — depends on driver, monitor, sequencer, config
+7. **Sequences** — depends on transaction, sequencer
+8. **Environment** — depends on agent, config
+9. **Coverage, Scoreboard, Ref Model** — depends on transaction

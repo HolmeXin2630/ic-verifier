@@ -12,7 +12,7 @@
 │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘     │
 │         │                │                │             │
 │  ┌──────▼────────────────▼────────────────▼──────┐      │
-│  │  Virtual Sequencer                             │      │
+│  │  sqr_pool (global singleton)                   │      │
 │  └───────────────────────┬───────────────────────┘      │
 ├──────────────────────────┼──────────────────────────────┤
 │  Layer 2: UVC Layer      │                               │
@@ -141,68 +141,94 @@ endclass
 
 ## Config_db Pattern
 
-### Hierarchical Key Design
+### Rule: config_db Only for Virtual Interface (module → UVM)
 
 ```systemverilog
-// ✅ DO: Use consistent, hierarchical keys
-// Convention: <component_path>.<property_name>
-uvm_config_db#(int)::set(this, "agent*", "num_masters", 4);
-uvm_config_db#(virtual apb_if)::set(this, "agent*.drv", "vif", vif);
+// ✅ DO: Use config_db ONLY for passing VIF from module domain to UVM domain
+// In tb_top (module domain):
+initial begin
+    uvm_config_db#(virtual apb_if)::set(null, "*.apb_agnt*", "vif", apb_vif);
+    uvm_config_db#(virtual axi_if)::set(null, "*.axi_agnt*", "vif", axi_vif);
+    run_test();
+end
 
-// ✅ DO: Use wildcard in set, explicit path in get
-// Parent sets with wildcard (affects all matching children):
-uvm_config_db#(int)::set(this, "agent*", "timeout", 1000);
+// In agent (UVM domain):
+virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual apb_if)::get(this, "", "vif", vif))
+        `uvm_fatal("NOVIF", "VIF not set")
+endfunction
 
-// Child gets with explicit self-reference:
-uvm_config_db#(int)::get(this, "", "timeout", timeout);
+// ❌ DON'T: Use config_db to pass config/parameters within UVM hierarchy
+// UVM components should use explicit dependency injection instead
 ```
 
-### Race Condition Avoidance
+### Dependency Injection Within UVM Hierarchy
+
+Reference: [uvc_gen environment template](https://github.com/HolmeXin2630/uvc_gen/blob/master/templates/default/xxx_uvc/xxx_environment.sv)
 
 ```systemverilog
-// ✅ DO: Set in build_phase of parent, get in build_phase of child
+// ✅ DO: env_cfg holds agt_cfg[], env injects into agents
+class my_env_cfg extends uvm_object;
+    `uvm_object_utils(my_env_cfg)
+
+    int agent_num = 2;
+    my_agent_cfg agt_cfg[];  // Array of agent configs
+
+    function new(string name = "my_env_cfg");
+        super.new(name);
+    endfunction
+
+    function void build();
+        agt_cfg = new[agent_num];
+        foreach (agt_cfg[i])
+            agt_cfg[i] = my_agent_cfg::type_id::create($sformatf("agt_cfg[%0d]", i));
+    endfunction
+endclass
+
 class my_env extends uvm_env;
+    `uvm_component_utils(my_env)
+
+    my_env_cfg  env_cfg;
+    my_agent    agt[];
+
     virtual function void build_phase(uvm_phase phase);
         super.build_phase(phase);
-        // Set before children are created
-        uvm_config_db#(int)::set(this, "agent*", "num_masters", 4);
-        // Create children
-        agent = my_agent::type_id::create("agent", this);
+
+        // Build agent configs from env_cfg
+        env_cfg.build();
+
+        // Create agents and inject configs
+        agt = new[env_cfg.agent_num];
+        foreach (agt[i]) begin
+            agt[i] = my_agent::type_id::create($sformatf("agt[%0d]", i), this);
+            agt[i].cfg = env_cfg.agt_cfg[i];  // ✅ Direct injection
+        end
     endfunction
 endclass
 
+// Agent receives config via direct assignment
 class my_agent extends uvm_agent;
-    int num_masters;
+    my_agent_cfg cfg;  // Set by parent
 
     virtual function void build_phase(uvm_phase phase);
         super.build_phase(phase);
-        // Get after parent has set
-        if (!uvm_config_db#(int)::get(this, "", "num_masters", num_masters))
-            `uvm_fatal("CFG", "num_masters not set")
+        // cfg is already set by parent — no config_db get needed
+        if (cfg == null)
+            `uvm_fatal("NOCFG", "Config not injected by parent")
     endfunction
 endclass
 ```
 
-### Type-Safe Wrapper Pattern
+### Why
 
-```systemverilog
-// ✅ DO: Create a config wrapper for complex configurations
-class my_env_config extends uvm_object;
-    int num_masters;
-    int num_slaves;
-    bit enable_coverage;
-    // ... more fields ...
-
-    // Type-safe get/set methods
-    static function bit get_config(uvm_component cntxt, output my_env_config cfg);
-        return uvm_config_db#(my_env_config)::get(cntxt, "", "env_cfg", cfg);
-    endfunction
-
-    static function void set_config(uvm_component cntxt, input my_env_config cfg);
-        uvm_config_db#(my_env_config)::set(cntxt, "env*", "env_cfg", cfg);
-    endfunction
-endclass
-```
+| Aspect | config_db | Dependency Injection |
+|--------|-----------|---------------------|
+| Type safety | Runtime check | Compile-time check |
+| Traceability | Hidden, string-keyed | Explicit, visible in code |
+| Refactoring | Fragile (path changes break it) | Safe (compiler catches errors) |
+| Debug | Hard (dump config_db) | Easy (follow assignments) |
+| Use case | module→UVM boundary only | UVM hierarchy |
 
 ## TLM Connection Pattern
 
@@ -451,20 +477,30 @@ endclass
 ### Where to Raise/Drop
 
 ```systemverilog
-// ✅ DO: Raise/drop in sequence (not in driver/monitor)
-class my_sequence extends uvm_sequence#(my_transaction);
+// ✅ DO: Raise/drop ONLY in top-level virtual sequence
+class my_virtual_sequence extends uvm_sequence;
     virtual task body();
-        phase.raise_objection(this, "Starting stimulus");
-        `uvm_info("SEQ", "Starting stimulus generation", UVM_MEDIUM)
+        phase.raise_objection(this, "Test start");
+        `uvm_info("VSEQ", "Starting coordinated stimulus", UVM_MEDIUM)
 
-        // Generate transactions
+        fork
+            apb_seq.start(apb_sqr);
+            axi_seq.start(axi_sqr);
+        join
+
+        `uvm_info("VSEQ", "Stimulus complete", UVM_MEDIUM)
+        phase.drop_objection(this, "Test end");
+    endtask
+endclass
+
+// ❌ DON'T: Raise/drop in UVC sub-sequences — they are pure stimulus generators
+class apb_sequence extends uvm_sequence#(apb_transaction);
+    virtual task body();
+        // NO objection — parent vseq controls lifecycle
         repeat (100) begin
             my_transaction item;
             `uvm_do(item)
         end
-
-        `uvm_info("SEQ", "Stimulus complete", UVM_MEDIUM)
-        phase.drop_objection(this, "Stimulus complete");
     endtask
 endclass
 
@@ -594,12 +630,17 @@ class my_agent extends uvm_agent;
 
     uvm_analysis_port#(my_transaction) ap;
 
+    // ✅ DO: Provide get_sequencer() for sqr_pool integration
+    virtual function uvm_sequencer_base get_sequencer();
+        return sqr;
+    endfunction
+
     virtual function void build_phase(uvm_phase phase);
         super.build_phase(phase);
 
-        // Get configuration
-        if (!uvm_config_db#(my_config)::get(this, "", "cfg", cfg))
-            `uvm_fatal("NOCFG", "Config not set")
+        // Config injected by parent — verify it exists
+        if (cfg == null)
+            `uvm_fatal("NOCFG", "Config not injected by parent")
 
         // Always create monitor
         mon = my_monitor::type_id::create("mon", this);
@@ -632,87 +673,139 @@ class my_agent extends uvm_agent;
 endclass
 ```
 
-## Virtual Sequence Pattern
+## Virtual Sequence Pattern (Sequencer Pool)
 
-### Multi-UVC Coordination
+Reference: [DVCon India 2025 — Cummings, Glasser, Kulkarni](https://dvcon-proceedings.org/wp-content/uploads/1B1-DVConIndia2025_Final_Paper_3272.pdf)
+
+**Do NOT use virtual_sequencer.** Use sqr_pool (singleton) or sqr_aggregator instead.
+
+### sqr_pool — Global Sequencer Pool
 
 ```systemverilog
-// ✅ DO: Use virtual sequence for coordinating multiple UVCs
-class virtual_sequencer extends uvm_sequencer;
-    `uvm_component_utils(virtual_sequencer)
+// String-keyed singleton pool for sequencer handles
+class sqr_pool #(type T = uvm_sequencer_base) extends uvm_object;
+    static sqr_pool#(T) pool;
+    T pool_h[string];
 
-    // References to sub-sequencers
-    apb_sequencer  apb_sqr;
-    axi_sequencer  axi_sqr;
-    clk_sequencer  clk_sqr;
+    static function sqr_pool#(T) get_global_pool();
+        if (pool == null) pool = new("global_sqr_pool");
+        return pool;
+    endfunction
 
-    function new(string name, uvm_component parent);
-        super.new(name, parent);
+    function void add(string name, T sqr);
+        pool_h[name] = sqr;
+    endfunction
+
+    function T get(string name);
+        if (!pool_h.exists(name))
+            `uvm_fatal("SQR_POOL", $sformatf("Sequencer '%0s' not found", name))
+        return pool_h[name];
+    endfunction
+
+    function void dump();
+        `uvm_info("SQR_POOL", "--- SEQUENCER POOL ENTRIES ---", UVM_LOW)
+        foreach (pool_h[name])
+            `uvm_info("SQR_POOL", $sformatf("%10s : %s", name, pool_h[name].get_full_name()), UVM_LOW)
+        `uvm_info("SQR_POOL", "--- END SEQUENCER POOL ---", UVM_LOW)
+    endfunction
+endclass
+```
+
+### Agent: get_sequencer()
+
+```systemverilog
+// ✅ DO: Every agent implements get_sequencer()
+class my_agent extends uvm_agent;
+    my_sequencer sqr;
+
+    virtual function uvm_sequencer_base get_sequencer();
+        return sqr;
+    endfunction
+endclass
+```
+
+### Environment: store_sequencers()
+
+```systemverilog
+// ✅ DO: Environment stores agent sequencers into pool
+class my_env extends uvm_env;
+    typedef sqr_pool#(uvm_sequencer_base) sqr_pool_type;
+    sqr_pool_type sqrs = sqr_pool_type::get_global_pool();
+
+    apb_agent apb_agnt;
+    axi_agent axi_agnt;
+
+    virtual function void connect_phase(uvm_phase phase);
+        super.connect_phase(phase);
+        store_sequencers();
+    endfunction
+
+    virtual function void store_sequencers();
+        sqrs.add("APB", apb_agnt.get_sequencer());
+        sqrs.add("AXI", axi_agnt.get_sequencer());
+    endfunction
+endclass
+```
+
+### Virtual Sequence: set_sqr_handles()
+
+```systemverilog
+// ✅ DO: vseq_base retrieves handles from pool
+class vseq_base extends uvm_sequence#(uvm_sequence_item);
+    `uvm_object_utils(vseq_base)
+
+    typedef sqr_pool#(uvm_sequencer_base) sqr_pool_type;
+    sqr_pool_type sqrs = sqr_pool_type::get_global_pool();
+
+    uvm_sequencer_base APB;
+    uvm_sequencer_base AXI;
+
+    virtual function void set_sqr_handles();
+        if (APB == null) begin
+            APB = sqrs.get("APB");
+            AXI = sqrs.get("AXI");
+        end
     endfunction
 endclass
 
-// Base virtual sequence
-class base_virtual_sequence extends uvm_sequence;
-    `uvm_object_utils(base_virtual_sequence)
+// Concrete virtual sequence
+class my_vseq extends vseq_base;
+    `uvm_object_utils(my_vseq)
 
-    virtual_sequencer v_sqr;
+    task body();
+        apb_sequence apb_seq = apb_sequence::type_id::create("apb_seq");
+        axi_sequence axi_seq = axi_sequence::type_id::create("axi_seq");
 
-    virtual task body();
-        // Override in subclasses
-    endtask
-endclass
+        set_sqr_handles();
 
-// Example: coordinated traffic
-class coordinated_traffic extends base_virtual_sequence;
-    `uvm_object_utils(coordinated_traffic)
-
-    virtual task body();
         fork
-            // APB configuration writes
-            begin
-                apb_config_sequence apb_seq;
-                `uvm_do_on(apb_seq, v_sqr.apb_sqr)
-            end
-            // AXI data traffic
-            begin
-                axi_burst_sequence axi_seq;
-                `uvm_do_on(axi_seq, v_sqr.axi_sqr)
-            end
+            apb_seq.start(APB);
+            axi_seq.start(AXI);
         join
     endtask
 endclass
 ```
 
-### Default Sequence on Sequencer
+### Test: dump() for Debug
 
 ```systemverilog
-// ✅ DO: Set default sequence in test
+// ✅ DO: Call dump() in start_of_simulation_phase to verify pool contents
 class my_test extends uvm_test;
-    virtual function void build_phase(uvm_phase phase);
-        super.build_phase(phase);
+    typedef sqr_pool#(uvm_sequencer_base) sqr_pool_type;
+    sqr_pool_type sqrs = sqr_pool_type::get_global_pool();
 
-        // Set default sequence for APB sequencer
-        uvm_config_db#(uvm_object_wrapper)::set(
-            this,
-            "env.agent.sqr.run_phase",
-            "default_sequence",
-            apb_random_sequence::get_type()
-        );
-    endfunction
-endclass
-
-// ✅ DO: Use default sequence for simple tests
-class my_virtual_test extends my_test;
-    virtual function void build_phase(uvm_phase phase);
-        super.build_phase(phase);
-
-        // Set default virtual sequence
-        uvm_config_db#(uvm_object_wrapper)::set(
-            this,
-            "v_sqr.run_phase",
-            "default_sequence",
-            coordinated_traffic::get_type()
-        );
+    virtual function void start_of_simulation_phase(uvm_phase phase);
+        sqrs.dump();
     endfunction
 endclass
 ```
+
+### Why sqr_pool Over Virtual Sequencer
+
+| Aspect              | virtual_sequencer          | sqr_pool                     |
+|---------------------|----------------------------|------------------------------|
+| Coupling            | Tight — vseq must know sqr paths | Loose — string-keyed lookup |
+| Reusability         | Poor — vseq tied to env hierarchy | High — any env can add to pool |
+| Multi-env           | Need multiple vsequencers  | Single pool, unique names    |
+| Agent awareness     | Agent unaware              | Agent unaware (just get_sequencer) |
+| Debug               | Hard to trace              | dump() shows all entries     |

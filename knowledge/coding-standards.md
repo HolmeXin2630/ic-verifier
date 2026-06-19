@@ -10,15 +10,22 @@
 - Files: one class per file, filename matches class name (`my_driver.sv`)
 - Interfaces: `snake_case_if` suffix (`apb_if`, `axi_if`)
 - Packages: `snake_case_pkg` suffix (`apb_pkg`, `my_lib_pkg`)
+- Covergroups: `cg_<name>` (`cg_apb`, `cg_axi_burst`)
+- Coverpoints: `cp_<name>` (`cp_direction`, `cp_addr_range`)
+- Cross coverage: `crs_<name>` (`crs_dir_addr`, `crs_dir_err`)
 
 ## Code Organization
 
 - Package boundary: group related classes in a package
-- Import: use explicit package imports, avoid wildcard `import *`
+- Import: `import uvm_pkg::*` (wildcard OK for uvm_pkg); user packages use explicit imports where practical
+- Include: `include` component files inside the package (transaction → config → sequencer → driver → monitor → agent → seq_lib)
 - Class order: parameters → properties → constraints → methods → extern methods
 - One class per file unless tightly coupled inner classes
+- Include guard: use `` `ifndef `` / `` `define `` / `` `endif `` on all .sv/.svh files
 
 ## SV Language Style Rules
+
+> **Scope:** Procedural blocks (`always_ff`, `always_comb`) are for BFM/interface module code only. UVM classes use tasks and functions — no `always` blocks inside classes.
 
 ### Data Types
 
@@ -73,7 +80,7 @@ end
 always @(*) begin // WRONG — use always_comb
 ```
 
-### Blocking vs Non-blocking Assignments
+### Blocking vs Non-blocking Assignments (BFM only)
 
 ```systemverilog
 // ✅ DO: Non-blocking (<=) in sequential blocks
@@ -107,11 +114,18 @@ for (int i = 0; i < NUM_REGS; i++) begin
     reg_array[i] = '0;
 end
 
-// ❌ DON'T: Use while(true) — use a bounded loop or forever with disable
-// ✅ DO: Use forever with a named block for disable
-forever begin : main_loop
-    @(posedge clk);
-    if (done) disable main_loop;
+// ✅ DO: Reset-aware forever loop (BFM/driver pattern)
+forever begin
+    fork
+        begin
+            @(posedge vif.rst_n);
+            get_and_drive();
+        end
+        begin
+            @(negedge vif.rst_n);
+        end
+    join_any
+    disable fork;
 end
 ```
 
@@ -215,20 +229,19 @@ drv = my_driver::type_id::create("drv", this);
 ### Config_db Usage
 
 ```systemverilog
-// ✅ DO: Use type-safe get/set with explicit type
-virtual interface apb_if vif;
+// ✅ DO: Use config_db ONLY for virtual interface (module → UVM)
+// In tb_top:
+uvm_config_db#(virtual apb_if)::set(null, "*.apb_agnt*", "vif", apb_vif);
+// In agent:
 if (!uvm_config_db#(virtual apb_if)::get(this, "", "vif", vif))
     `uvm_fatal("NOVIF", "Virtual interface not set")
 
+// ❌ DON'T: Use config_db for config/parameters within UVM hierarchy
+// Use explicit dependency injection instead:
+//   apb_agnt.cfg = env_cfg.apb_cfg;
+
 // ❌ DON'T: Use wildcard or string-based get without type
 uvm_config_db#(virtual apb_if)::get(null, "*", "vif", vif);  // WRONG
-
-// ✅ DO: Set in parent's build_phase, get in child's build_phase
-// Parent:
-uvm_config_db#(int)::set(this, "agent*", "num_masters", 4);
-// Child:
-if (!uvm_config_db#(int)::get(this, "", "num_masters", num_masters))
-    `uvm_fatal("CFG", "num_masters not configured")
 ```
 
 ### Phase Handling
@@ -251,30 +264,33 @@ endfunction
 ### Objection Handling
 
 ```systemverilog
-// ✅ DO: Raise/drop objection in sequences
-class my_sequence extends uvm_sequence#(my_transaction);
+// ✅ DO: Raise/drop objection ONLY in top-level virtual sequence
+class my_virtual_sequence extends uvm_sequence;
     virtual task body();
-        phase.raise_objection(this);
-        // ... generate transactions ...
-        phase.drop_objection(this);
+        phase.raise_objection(this, "Test start");
+
+        fork
+            apb_seq.start(apb_sqr);
+            axi_seq.start(axi_sqr);
+        join
+
+        phase.drop_objection(this, "Test end");
+    endtask
+endclass
+
+// ❌ DON'T: Raise/drop objection in UVC sub-sequences
+// Sub-sequences are pure stimulus generators — they don't control test lifecycle
+class apb_sequence extends uvm_sequence#(apb_transaction);
+    virtual task body();
+        // NO objection here — parent vseq controls it
+        for (int i = 0; i < 100; i++) begin
+            `uvm_do(item)
+        end
     endtask
 endclass
 
 // ❌ DON'T: Raise/drop objection in driver or monitor
 // Driver is a slave — it doesn't decide when testing is done
-
-// ✅ DO: Use drain time in test for pending transactions
-virtual function void phase_ready_to_end(uvm_phase phase);
-    if (phase.is(uvm_run_phase::get())) begin
-        phase.raise_objection(this);
-        fork
-            begin
-                #100ns; // drain time
-                phase.drop_objection(this);
-            end
-        join_none
-    end
-endfunction
 ```
 
 ### TLM Port Usage
@@ -387,10 +403,9 @@ class apb_agent#(int ADDR_WIDTH = 32, int DATA_WIDTH = 32) extends uvm_agent;
     // ADDR_WIDTH and DATA_WIDTH are compile-time constants
 endclass
 
-// ✅ DO: Use config_db for behavioral configuration (may change per test)
+// ✅ DO: Use config object for behavioral configuration (injected by parent)
 class my_driver extends uvm_driver;
-    int unsigned timeout_cycles;  // Set via config_db
-    bit enable_coverage;          // Set via config_db
+    my_config cfg;  // Injected by agent: drv.cfg = this.cfg;
 endclass
 
 // ✅ DO: Use factory overrides for type substitution
