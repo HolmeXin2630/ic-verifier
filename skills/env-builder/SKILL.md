@@ -131,6 +131,14 @@ Before writing any code, define how each piece will be verified.
 
 **AI cannot claim completion without meeting the minimum verification level.**
 
+**Important: Assertion Verification**
+When adding concurrent assertions, be aware that:
+- Assertion errors use `$error` system task, not `uvm_error`
+- UVM report server does NOT capture assertion errors
+- Basic regression (`make regression`) may produce false passes
+- Always use comprehensive verification (`make verify`) for final verification
+- Check `~/.claude/skills/ic-verifier/knowledge/assertion-verification.md` for details
+
 ### Step 6: Incremental Implementation
 
 Implement in small steps following the plan:
@@ -289,4 +297,8 @@ Before reporting done, verify:
 - [ ] Code follows `~/.claude/skills/ic-verifier/knowledge/coding-standards.md`
 - [ ] UVC construction follows `~/.claude/skills/ic-verifier/knowledge/uvc-construction.md`
 - [ ] Design patterns follow `~/.claude/skills/ic-verifier/knowledge/design-patterns.md`
+- [ ] **Assertion verification** (if assertions present):
+  - Assertions use proper timing conditions
+  - Comprehensive verification (`make verify`) passes
+  - No false passes due to assertion error reporting
 - [ ] Non-runnable gaps honestly reported (if applicable)

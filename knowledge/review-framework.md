@@ -67,3 +67,8 @@ The reviewer applies the following checks (domain-specific checks are in each sk
 10. API is usable and stable
 11. Verification coverage defined
 12. No race conditions or implicit timing assumptions
+13. **Assertion verification** (if assertions are present):
+    - Assertions use proper timing conditions
+    - Assertions are tested and verified to work
+    - Verification script checks for assertion errors
+    - No false passes due to assertion error reporting
