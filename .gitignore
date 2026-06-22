@@ -1,6 +1,12 @@
 # Cloned dependencies
 tools/
 
+# Local Claude Code config
+.claude/
+
+# Development docs (internal plans/specs, not needed at runtime)
+docs/
+
 # Backup files
 *.backup
 
