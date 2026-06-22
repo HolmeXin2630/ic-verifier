@@ -6,6 +6,30 @@ A UVC (UVM Verification Component) is a self-contained, reusable verification un
 
 **Canonical template:** [uvc_gen/templates](https://github.com/HolmeXin2630/uvc_gen/tree/master/templates/default)
 
+## uvc_gen 集成
+
+### 自动生成模板
+
+env-builder skill 集成了 uvc_gen 工具，可以自动生成符合 UVM 规范的代码框架。
+
+**使用方式：**
+- 创建新 UVC 时，skill 会自动调用 uvc_gen 生成模板
+- 生成的模板包含：agent、driver、monitor、sequencer、transaction 等组件
+- 支持 single 和 mstslv 两种模式
+
+**模板定制：**
+- 生成的模板可以作为起点进行定制开发
+- 遵循模板的代码风格和命名规范
+- 可以基于模板进行迭代优化
+
+### 迭代优化
+
+当模板不完全满足需求时，可以使用 Iteration Flow：
+1. 分析现有模板结构
+2. 识别缺失的组件或功能
+3. 参考模板风格进行补全
+4. 保持代码一致性
+
 Not every UVC needs all components. Pick what you need based on scope:
 
 | Component | Required? | When to include |

@@ -14,6 +14,25 @@
 - Coverpoints: `cp_<name>` (`cp_direction`, `cp_addr_range`)
 - Cross coverage: `crs_<name>` (`crs_dir_addr`, `crs_dir_err`)
 
+## uvc_gen 代码风格
+
+uvc_gen 生成的代码遵循以下规范：
+
+### 命名约定
+- 类名：`{uvc_name}_{component}` (如 `ahb_driver`)
+- 文件名：`{uvc_name}_{component}.sv` (如 `ahb_driver.sv`)
+- 接口名：`{uvc_name}_if` (如 `ahb_if`)
+
+### 代码结构
+- 使用 UVM 标准宏：`uvm_component_utils`, `uvm_field_utils`
+- 遵循 UVM phase 机制
+- 使用 config_db 进行配置
+
+### 模板变量
+- 使用 `uvc_info` 对象访问 UVC 参数
+- 支持模板变量替换
+- 保持代码可读性
+
 ## Code Organization
 
 - Package boundary: group related classes in a package
