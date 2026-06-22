@@ -17,8 +17,29 @@ No more AI-generated code that "looks like UVM" but doesn't actually work.
 
 ## Installation
 
+### 方式一：使用 npx skills（推荐）
+
+支持 68+ 种 AI coding agents，包括 Claude Code、Codex、Cursor、GitHub Copilot 等。
+
 ```bash
-git clone https://github.com/YOUR_USERNAME/ic-verifier.git
+npx skills add HolmeXin2630/ic-verifier
+```
+
+安装后，运行以下命令安装 uvc_gen 依赖：
+
+```bash
+# 找到 skill 目录（根据 agent 类型）
+# Claude Code: ~/.claude/skills/ic-verifier
+# Codex: ~/.codex/skills/ic-verifier
+# Cursor: ~/.cursor/skills/ic-verifier
+
+cd ~/.claude/skills/ic-verifier && bash install.sh
+```
+
+### 方式二：手动安装（仅 Claude Code）
+
+```bash
+git clone https://github.com/HolmeXin2630/ic-verifier.git
 cd ic-verifier
 bash install.sh
 ```
@@ -29,7 +50,22 @@ This creates symlinks in `~/.claude/skills/`:
 
 ## Usage
 
-### First Use (in your project)
+### 支持的 Agents
+
+本 skill 支持所有主流 AI coding agents，包括：
+- Claude Code
+- Codex
+- Cursor
+- GitHub Copilot
+- Gemini CLI
+- Windsurf
+- Cline
+- Roo Code
+- 等等...
+
+### 首次使用
+
+在你的 AI agent 中运行：
 
 ```
 > /env-builder
