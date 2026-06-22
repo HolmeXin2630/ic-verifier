@@ -21,6 +21,34 @@ The following knowledge files are in `knowledge/` (relative to this skill direct
 | `knowledge/uvc-construction.md` | When building UVC, agent, driver, monitor, sequencer, or transaction |
 | `knowledge/assertion-verification.md` | When adding concurrent assertions |
 
+## Dependencies
+
+uvc_gen is a Python tool that generates UVC templates. It is only needed when creating UVC/VIP components.
+
+**When the task is UVC/VIP** (Full Flow Step 3), check if uvc_gen is available:
+
+```bash
+# Search these locations in order:
+# 1. <skill-dir>/tools/uvc_gen/uvc_gen.py
+# 2. <skill-dir>/../../ic-verifier/tools/uvc_gen/uvc_gen.py  (shared install)
+SKILL_DIR="$(dirname "$(readlink -f "$0")")"  # or resolve from SKILL.md location
+```
+
+If not found, install it automatically:
+
+```bash
+# Clone into the skill's tools/ directory
+mkdir -p <skill-dir>/tools
+git clone --depth 1 https://github.com/HolmeXin2630/uvc_gen.git <skill-dir>/tools/uvc_gen
+
+# Install Python dependencies
+pip3 install jinja2 rich
+```
+
+If git clone fails (network issues), tell the user and offer to proceed without uvc_gen (write UVC code manually instead).
+
+For non-UVC tasks (SV library, scoreboard, driver standalone, etc.), skip this entirely.
+
 ## Project Configuration
 
 On first invocation, check for `.ic-verifier.yml` in the project root. If missing, generate it with these defaults and ask the user to confirm:

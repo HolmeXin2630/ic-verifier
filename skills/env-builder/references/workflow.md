@@ -62,10 +62,15 @@ Find `uvc_gen.py` by checking these locations in order:
 1. `tools/uvc_gen/uvc_gen.py` (relative to skill directory)
 2. `../../ic-verifier/tools/uvc_gen/uvc_gen.py` (shared tools directory)
 
-If not found, prompt the user:
+If not found, install it automatically:
+
+```bash
+mkdir -p <skill-dir>/tools
+git clone --depth 1 https://github.com/HolmeXin2630/uvc_gen.git <skill-dir>/tools/uvc_gen
+pip3 install jinja2 rich
 ```
-uvc_gen is not installed. Run: cd <ic-verifier-dir> && bash install.sh
-```
+
+If git clone fails (network issues), tell the user and offer to proceed without uvc_gen (write UVC code manually).
 
 #### 3c: Generate Template
 
