@@ -6,96 +6,83 @@ disable-model-invocation: true
 
 # Setup IC Verifier
 
-Scaffold the per-repo configuration that the IC verification skills assume:
+Scaffold the configuration that IC verification skills need:
 
+- **Skill symlinks** — ensure `~/.claude/skills/` can find the skills
 - **Knowledge base** — shared coding standards, design patterns, UVC construction guides
 - **uvc_gen** — UVC template generator tool
 
-This is a prompt-driven skill, not a deterministic script. Explore, present what you found, confirm with the user, then write.
+This is a prompt-driven skill. Explore the environment, present findings, confirm with the user, then execute.
 
 ## Process
 
 ### 1. Explore
 
-Look at the current environment:
+Find where the skills are actually installed. Check these locations in order:
 
-- Check if `~/.agents/skills/env-builder/` exists
-- Check if `~/.agents/skills/ic-verifier/knowledge/` exists and has files
-- Check if `~/.agents/skills/env-builder/knowledge` is a symlink pointing to `../ic-verifier/knowledge`
-- Check if uvc_gen is installed (search for `uvc_gen.py` in common locations)
+1. **`~/.claude/skills/env-builder/`** — already symlinked? Read the symlink target.
+2. **`~/.agents/skills/env-builder/`** — user-level npx install.
+3. **`<project>/.agents/skills/env-builder/`** — project-level npx install. Search upward from cwd for `.agents/skills/env-builder/`.
+4. **Manual clone** — check if `skills/env-builder/` exists relative to the ic-verifier repo root.
+
+Once found, determine:
+- Is `~/.claude/skills/env-builder` a valid symlink? → `ls -la ~/.claude/skills/env-builder`
+- Does `knowledge/` exist inside the env-builder directory?
+- Is it a symlink or a real directory?
+- Is uvc_gen installed? Search for `uvc_gen.py` next to the skill.
 
 ### 2. Present findings and ask
 
-Summarise what's present and what's missing. Walk the user through setup **one step at a time**.
+Summarise what's present and what's missing. Walk through setup one step at a time.
 
-**Section A — Knowledge base symlink.**
+**Section A — Skill symlinks (if missing).**
 
-The knowledge base contains shared coding standards, design patterns, UVC construction guides, and review frameworks. Creating a symlink allows all skills to access the same knowledge base without duplication.
-
-Check: does `~/.agents/skills/env-builder/knowledge` exist as a symlink to `../ic-verifier/knowledge`?
-
-- If yes and the target has files → knowledge is set up
-- If the directory exists but is NOT a symlink → needs migration (back up files, create symlink)
-- If missing → create the symlink
-
-**Section B — uvc_gen tool.**
-
-uvc_gen is a Python tool that generates UVC templates. Required for the env-builder skill when creating UVC/VIP components.
-
-Search for `uvc_gen.py` in:
-1. `~/.agents/skills/ic-verifier/tools/uvc_gen/uvc_gen.py`
-2. `~/.agents/skills/env-builder/tools/uvc_gen/uvc_gen.py`
-
-If not found, clone it.
-
-**Section C — Python dependencies.**
-
-uvc_gen requires Python 3 with jinja2 and rich packages.
-
-### 3. Confirm and execute
-
-Show the user what will be done:
-- Create symlink: `~/.agents/skills/env-builder/knowledge` → `../ic-verifier/knowledge`
-- Clone uvc_gen: `git clone https://github.com/HolmeXin2630/uvc_gen.git`
-- Install dependencies: `pip3 install jinja2 rich`
-
-Let them confirm before proceeding.
-
-### 4. Execute
-
-**Step A: Create knowledge base symlink**
+If `~/.claude/skills/env-builder` doesn't exist or points to the wrong place, create it:
 
 ```bash
-# Ensure shared knowledge directory exists
-mkdir -p ~/.agents/skills/ic-verifier/knowledge
+# Find the actual env-builder directory (from step 1)
+ENV_BUILDER_DIR="<discovered path>"
+mkdir -p ~/.claude/skills
+ln -sf "$ENV_BUILDER_DIR" ~/.claude/skills/env-builder
+```
 
-# If env-builder has a real directory (not symlink), migrate files first
-if [ -d ~/.agents/skills/env-builder/knowledge ] && [ ! -L ~/.agents/skills/env-builder/knowledge ]; then
-    cp ~/.agents/skills/env-builder/knowledge/*.md ~/.agents/skills/ic-verifier/knowledge/
-    rm -rf ~/.agents/skills/env-builder/knowledge
+**Section B — Knowledge base.**
+
+The knowledge base is shared across skills. If `knowledge/` inside env-builder is a real directory (not a symlink), and a shared `knowledge/` exists at the repo root, create a symlink instead:
+
+```bash
+# Only if repo root knowledge/ exists and env-builder/knowledge/ is a real dir
+if [ -d "<repo-root>/knowledge" ] && [ -d "$ENV_BUILDER_DIR/knowledge" ] && [ ! -L "$ENV_BUILDER_DIR/knowledge" ]; then
+    cp "$ENV_BUILDER_DIR/knowledge/"*.md "<repo-root>/knowledge/" 2>/dev/null
+    rm -rf "$ENV_BUILDER_DIR/knowledge"
+    ln -sf "<relative-path-to-repo-root>/knowledge" "$ENV_BUILDER_DIR/knowledge"
 fi
-
-# Create symlink
-ln -sf ../ic-verifier/knowledge ~/.agents/skills/env-builder/knowledge
 ```
 
-**Step B: Install uvc_gen**
+If `knowledge/` is already a symlink or already has files, skip.
 
+**Section C — uvc_gen tool.**
+
+uvc_gen generates UVC templates. Search for `uvc_gen.py` in:
+1. Next to the skill: `<skill-dir>/tools/uvc_gen/uvc_gen.py`
+2. In repo root: `<repo-root>/tools/uvc_gen/uvc_gen.py`
+
+If not found, clone:
 ```bash
-cd ~/.agents/skills/ic-verifier
-git clone --depth 1 https://github.com/HolmeXin2630/uvc_gen.git tools/uvc_gen
+git clone --depth 1 https://github.com/HolmeXin2630/uvc_gen.git <target-dir>/tools/uvc_gen
 ```
 
-**Step C: Install Python dependencies**
+**Section D — Python dependencies.**
 
+uvc_gen requires jinja2 and rich:
 ```bash
 pip3 install jinja2 rich
 ```
 
-### 5. Done
+### 3. Confirm and execute
 
-Tell the user the setup is complete. The env-builder skill can now access:
-- Knowledge base: `~/.agents/skills/env-builder/knowledge/` (symlink to shared directory)
-- uvc_gen tool: `~/.agents/skills/ic-verifier/tools/uvc_gen/`
+Show the user what will be done. Let them confirm before proceeding.
 
-Mention they can re-run `/setup-ic-verifier` if they need to update the knowledge base or uvc_gen tool.
+### 4. Done
+
+Tell the user the setup is complete. Mention they can re-run `/setup-ic-verifier` if needed.

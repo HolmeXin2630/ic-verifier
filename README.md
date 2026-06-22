@@ -25,13 +25,15 @@ No more AI-generated code that "looks like UVM" but doesn't actually work.
 npx skills add HolmeXin2630/ic-verifier
 ```
 
-然后在 Claude Code 中运行：
+安装完成后，运行安装脚本创建 symlink 和工具：
 
-```
-/setup-ic-verifier
+```bash
+# 找到安装路径（npx 输出中会显示）
+cd <安装路径>/..
+bash install.sh
 ```
 
-这个命令会自动创建知识库符号链接并安装 uvc_gen 工具。
+或者在 Claude Code 中运行 `/setup-ic-verifier`，它会自动检测安装位置并配置。
 
 ### 方式二：手动安装（仅 Claude Code）
 
@@ -42,8 +44,8 @@ bash install.sh
 ```
 
 This creates symlinks in `~/.claude/skills/`:
-- `ic-verifier/` — shared knowledge (coding standards, review framework)
 - `env-builder/` — the UVM environment building skill
+- `setup-ic-verifier/` — one-time setup skill
 
 ## Usage
 
