@@ -123,22 +123,33 @@ end
 ### Interface Access in UVM
 
 ```systemverilog
-// ❌ DON'T: Use modport in UVM classes — modport is for RTL/BFM only
-virtual interface my_if.master_mp vif;  // WRONG
-vif.master_mp.data = 32'h1;             // WRONG
+// ❌ DON'T: Use modport in interface or UVM classes
+interface my_if;
+    modport master (...);  // WRONG — modport in interface
+endinterface
 
-// ✅ DO: Use clocking block in UVM classes
-virtual interface my_if vif;
-vif.cb_drv.data <= 32'h1;              // Correct — uses clocking block
-@(vif.cb_mon);                          // Correct — synchronized sampling
+class my_driver extends uvm_driver;
+    virtual my_if.master vif;  // WRONG — modport in UVM class
+endclass
+
+// ✅ DO: Use clocking block only
+interface my_if;
+    clocking master_cb (...);   // Correct — clocking block
+    clocking monitor_cb (...);  // Correct — clocking block
+endinterface
+
+class my_driver extends uvm_driver;
+    virtual my_if vif;           // Correct — no modport
+    vif.master_cb.data <= 32'h1; // Correct — uses clocking block
+endclass
 ```
 
-**Rule: UVM 域（driver、monitor、sequencer、scoreboard 等）禁止使用 modport，只能使用 clocking block。**
+**Rule: 整个验证环境中禁止出现 modport，只能使用 clocking block。**
 
 - Clocking block 提供时序同步（input/output skew），modport 不提供
 - Clocking block 保证信号采样和驱动在正确的时钟沿，避免竞争
-- Modport 仅用于 RTL 模块之间或 BFM 模块内的接口约束
-- 接口定义中应同时声明 `cb_drv`（master 驱动）和 `cb_mon`（monitor 采样）两个 clocking block
+- Modport 仅用于 RTL 模块之间的接口约束，验证环境中不需要
+- Interface 定义中只声明 clocking block，不声明 modport
 
 ### Loop Idioms
 
