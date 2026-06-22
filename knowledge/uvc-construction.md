@@ -230,21 +230,21 @@ endfunction
 
 // Reset-aware main loop
 task my_driver::run();
-    fork begin
+    fork begin  // Guard fork
         forever begin
             fork
                 begin
-                    @(posedge vif.rst_n);
+                    @(posedge vif.mrst_n);
                     vif.reset_driver_signal();  // Reset cleanup in interface
                     get_and_drive();
                 end
                 begin
-                    @(negedge vif.rst_n);
+                    @(negedge vif.mrst_n);
                 end
             join_any
             disable fork;
         end
-    end join
+    end join  // Guard fork
 endtask
 
 // Standard get_next_item loop
@@ -271,6 +271,8 @@ endtask
 
 ### Reset Handling Pattern
 
+**Note:** The main reset-aware loop is in `run()` task (see Driver Implementation above). This pattern shows how to handle reset within individual driving tasks if needed.
+
 ```systemverilog
 // ✅ DO: Use fork-join_any for interruptible driving
 protected virtual task drive_item(my_transaction item);
@@ -282,26 +284,18 @@ protected virtual task drive_item(my_transaction item);
             end
             begin
                 // Wait for reset
-                @(negedge vif.rst_n);
+                @(negedge vif.mrst_n);
             end
         join_any
         disable fork;
     end join
 
     // If reset occurred, clean up signals
-    if (!vif.rst_n) begin
-        reset_signals();
-        @(posedge vif.rst_n);
+    if (!vif.mrst_n) begin
+        vif.reset_driver_signal();  // Reset cleanup in interface
+        @(posedge vif.mrst_n);
     end
 endtask
-
-protected virtual function void reset_signals();
-    vif.cb.psel    <= '0;
-    vif.cb.penable <= '0;
-    vif.cb.paddr   <= '0;
-    vif.cb.pwrite  <= '0;
-    vif.cb.pwdata  <= '0;
-endfunction
 ```
 
 ### Back-Pressure Handling

@@ -137,11 +137,12 @@ end
 forever begin
     fork
         begin
-            @(posedge vif.rst_n);
+            @(posedge vif.mrst_n);
+            vif.reset_driver_signal();  // Reset cleanup in interface
             get_and_drive();
         end
         begin
-            @(negedge vif.rst_n);
+            @(negedge vif.mrst_n);
         end
     join_any
     disable fork;

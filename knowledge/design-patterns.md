@@ -389,88 +389,132 @@ endfunction
 
 ### Reset-Aware Driver
 
+**Pattern:** Use `run()` task (not `run_phase`) with `forever begin...end` loop. Reset detection uses `fork...join_any` with `disable fork`. Signal cleanup lives in interface's `reset_driver_signal()` task.
+
 ```systemverilog
-class reset_aware_driver extends uvm_driver#(my_transaction);
-    `uvm_component_utils(reset_aware_driver)
+class my_driver extends uvm_driver#(my_transaction);
+    `uvm_component_utils(my_driver)
 
-    event reset_detected;
+    virtual interface my_if vif;
+    my_config cfg;
 
-    virtual task run_phase(uvm_phase phase);
-        forever begin
-            fork begin
-                fork
-                    begin
-                        // Main driving loop
-                        forever begin
-                            my_transaction req;
-                            seq_item_port.get_next_item(req);
-                            drive_item(req);
-                            seq_item_port.item_done();
-                        end
-                    end
-                    begin
-                        // Reset detection
-                        @(negedge vif.rst_n);
-                        -> reset_detected;
-                    end
-                join_any
-                disable fork;
-            end join
-
-            // Reset cleanup
-            handle_reset();
-        end
-    endtask
-
-    protected virtual function void handle_reset();
-        `uvm_info("DRV", "Reset detected — cleaning up", UVM_MEDIUM)
-        reset_signals();
-        // Drain any pending items from sequencer
-        seq_item_port.disable_auto_item_recording();
-        @(posedge vif.rst_n);
-        `uvm_info("DRV", "Reset released — resuming", UVM_MEDIUM)
-    endfunction
-
-    protected virtual function void reset_signals();
-        vif.cb.psel    <= '0;
-        vif.cb.penable <= '0;
-        vif.cb.paddr   <= '0;
-        vif.cb.pwrite  <= '0;
-        vif.cb.pwdata  <= '0;
-    endfunction
+    extern function new(string name = "my_driver", uvm_component parent = null);
+    extern virtual function void build_phase(uvm_phase phase);
+    extern virtual protected task get_and_drive();
+    extern virtual protected task drive_trans(my_transaction trans);
+    extern virtual task run();
 endclass
+
+function my_driver::new(string name = "my_driver", uvm_component parent = null);
+    super.new(name, parent);
+endfunction
+
+function void my_driver::build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    vif = cfg.vif;  // VIF from config, not config_db
+endfunction
+
+// Reset-aware main loop
+task my_driver::run();
+    fork begin  // Guard fork
+        forever begin
+            fork
+                begin
+                    @(posedge vif.mrst_n);
+                    vif.reset_driver_signal();  // Reset cleanup in interface
+                    get_and_drive();
+                end
+                begin
+                    @(negedge vif.mrst_n);
+                end
+            join_any
+            disable fork;
+        end
+    end join  // Guard fork
+endtask
+
+// Standard get_next_item loop
+task my_driver::get_and_drive();
+    forever begin
+        seq_item_port.get_next_item(req);
+        drive_trans(req);
+        seq_item_port.item_done();
+    end
+endtask
+
+// Protocol-specific driving (override per protocol)
+task my_driver::drive_trans(my_transaction trans);
+    // Protocol-specific implementation
+endtask
 ```
+
+**Key Points:**
+- **`run()` not `run_phase`:** Agent calls `run()` from its `run_phase`, allowing per-agent lifecycle control
+- **`vif.mrst_n`:** Active-low reset signal, named `mrst_n` in interface
+- **`vif.reset_driver_signal()`:** Reset cleanup logic lives in interface module, not in driver
+- **`forever begin...end` loop:** Continuously detects reset and restarts driving
+- **`fork...join_any` + `disable fork`:** Interrupts driving when reset detected
 
 ### Reset-Aware Monitor
 
-```systemverilog
-class reset_aware_monitor extends uvm_monitor;
-    virtual task run_phase(uvm_phase phase);
-        forever begin
-            my_transaction item;
-            fork begin
-                fork
-                    begin
-                        collect_transaction(item);
-                        if (item != null) ap.write(item);
-                    end
-                    begin
-                        @(negedge vif.rst_n);
-                        item = null;  // Discard incomplete
-                    end
-                join_any
-                disable fork;
-            end join
+**Pattern:** Use `run()` task (not `run_phase`) with same reset-aware pattern as driver. Protocol-specific monitoring in separate `rcv_data_phase()` task.
 
-            // Wait for reset release before resuming
-            if (!vif.rst_n) begin
-                `uvm_info("MON", "Reset — discarding incomplete transaction", UVM_MEDIUM)
-                @(posedge vif.rst_n);
-            end
-        end
-    endtask
+```systemverilog
+class my_monitor extends uvm_monitor;
+    `uvm_component_utils(my_monitor)
+
+    virtual interface my_if vif;
+    my_config cfg;
+
+    uvm_analysis_port#(my_transaction) broadcaster;
+
+    extern function new(string name = "my_monitor", uvm_component parent = null);
+    extern virtual function void build_phase(uvm_phase phase);
+    extern virtual task run();
+    extern virtual task rcv_data_phase();
 endclass
+
+function my_monitor::new(string name = "my_monitor", uvm_component parent = null);
+    super.new(name, parent);
+    broadcaster = new("broadcaster", this);
+endfunction
+
+function void my_monitor::build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    vif = cfg.vif;  // VIF from config, not config_db
+endfunction
+
+// Reset-aware main loop
+task my_monitor::run();
+    fork begin  // Guard fork
+        forever begin
+            fork
+                begin
+                    @(posedge vif.mrst_n);
+                    rcv_data_phase();
+                end
+                begin
+                    @(negedge vif.mrst_n);
+                end
+            join_any
+            disable fork;
+        end
+    end join  // Guard fork
+endtask
+
+// Protocol-specific monitoring (override per protocol)
+task my_monitor::rcv_data_phase();
+    fork
+        // Protocol-specific collection loop
+    join
+endtask
 ```
+
+**Key Points:**
+- **`broadcaster` not `ap`:** Analysis port named `broadcaster`, created in `new()`
+- **`run()` not `run_phase`:** Same reset-aware pattern as driver
+- **`rcv_data_phase()`:** Separate task for protocol-specific monitoring, called after reset deasserts
+- **Observable-only:** Monitor never drives signals — purely observational
 
 ## Phase Objection Pattern
 
