@@ -25,16 +25,13 @@ No more AI-generated code that "looks like UVM" but doesn't actually work.
 npx skills add HolmeXin2630/ic-verifier
 ```
 
-安装后，运行以下命令安装 uvc_gen 依赖：
+然后在 Claude Code 中运行：
 
-```bash
-# 找到 skill 目录（根据 agent 类型）
-# Claude Code: ~/.claude/skills/ic-verifier
-# Codex: ~/.codex/skills/ic-verifier
-# Cursor: ~/.cursor/skills/ic-verifier
-
-cd ~/.claude/skills/ic-verifier && bash install.sh
 ```
+/setup-ic-verifier
+```
+
+这个命令会自动创建知识库符号链接并安装 uvc_gen 工具。
 
 ### 方式二：手动安装（仅 Claude Code）
 

@@ -214,7 +214,7 @@ When adding concurrent assertions, be aware that:
 - UVM report server does NOT capture assertion errors
 - Basic regression (`make regression`) may produce false passes
 - Always use comprehensive verification (`make verify`) for final verification
-- Check `~/.claude/skills/ic-verifier/knowledge/assertion-verification.md` for details
+- Check `knowledge/assertion-verification.md` for details
 
 ### Step 9: Incremental Implementation
 
@@ -228,12 +228,12 @@ Implement in small steps following the plan:
 
 ### Step 10: Review
 
-Read `~/.claude/skills/ic-verifier/knowledge/review-framework.md`.
+Read `knowledge/review-framework.md`.
 
 Review the implementation against:
-- `~/.claude/skills/ic-verifier/knowledge/coding-standards.md`
-- `~/.claude/skills/ic-verifier/knowledge/uvc-construction.md` (for UVC/agent/driver/monitor patterns)
-- `~/.claude/skills/ic-verifier/knowledge/design-patterns.md` (for factory/config_db/TLM/reset patterns)
+- `knowledge/coding-standards.md`
+- `knowledge/uvc-construction.md` (for UVC/agent/driver/monitor patterns)
+- `knowledge/design-patterns.md` (for factory/config_db/TLM/reset patterns)
 - The spec produced in Step 6
 - The verification strategy from Step 8
 
@@ -386,10 +386,10 @@ Read the target files and any available spec/documentation.
 
 ### Step 2: Review
 
-Read `~/.claude/skills/ic-verifier/knowledge/review-framework.md`.
-Read `~/.claude/skills/ic-verifier/knowledge/coding-standards.md`.
-Read `~/.claude/skills/ic-verifier/knowledge/uvc-construction.md`.
-Read `~/.claude/skills/ic-verifier/knowledge/design-patterns.md`.
+Read `knowledge/review-framework.md`.
+Read `knowledge/coding-standards.md`.
+Read `knowledge/uvc-construction.md`.
+Read `knowledge/design-patterns.md`.
 
 Review the code against:
 - UVM methodology correctness
@@ -413,9 +413,9 @@ Before reporting done, verify:
 - [ ] Minimum verification level achieved
 - [ ] Review verdict is `pass` or `pass-with-nits`
 - [ ] No blocking findings remain
-- [ ] Code follows `~/.claude/skills/ic-verifier/knowledge/coding-standards.md`
-- [ ] UVC construction follows `~/.claude/skills/ic-verifier/knowledge/uvc-construction.md`
-- [ ] Design patterns follow `~/.claude/skills/ic-verifier/knowledge/design-patterns.md`
+- [ ] Code follows `knowledge/coding-standards.md`
+- [ ] UVC construction follows `knowledge/uvc-construction.md`
+- [ ] Design patterns follow `knowledge/design-patterns.md`
 - [ ] **Assertion verification** (if assertions present):
   - Assertions use proper timing conditions
   - Comprehensive verification (`make verify`) passes
