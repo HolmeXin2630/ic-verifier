@@ -55,17 +55,27 @@ echo "Installing uvc_gen..."
 mkdir -p "$REPO_DIR/tools"
 
 if [ ! -d "$UVC_GEN_DIR" ]; then
-    git clone --branch "$UVC_GEN_BRANCH" --depth 1 "$UVC_GEN_REPO" "$UVC_GEN_DIR"
-    echo "✅ uvc_gen 已安装到 $UVC_GEN_DIR"
+    echo "Cloning uvc_gen from $UVC_GEN_REPO ..."
+    if ! git clone --branch "$UVC_GEN_BRANCH" --depth 1 "$UVC_GEN_REPO" "$UVC_GEN_DIR" 2>&1; then
+        echo "ERROR: git clone failed. Please check your network and try again."
+        echo "  You can also manually clone: git clone $UVC_GEN_REPO $UVC_GEN_DIR"
+        echo "  Continuing without uvc_gen..."
+        UVC_GEN_CLONE_FAILED=true
+    else
+        echo "✅ uvc_gen 已安装到 $UVC_GEN_DIR"
+    fi
 else
     echo "✅ uvc_gen 已存在，跳过安装"
 fi
 
 # 检查 Python 依赖
-if command -v python3 &> /dev/null; then
+if [ "${UVC_GEN_CLONE_FAILED:-false}" = "true" ]; then
+    echo "⚠️  uvc_gen 克隆失败，跳过依赖安装"
+elif command -v python3 &> /dev/null; then
     echo "✅ Python3 已安装"
-    if [ -f "$UVC_GEN_DIR/requirements.txt" ]; then
-        pip3 install -r "$UVC_GEN_DIR/requirements.txt" 2>/dev/null || true
+    if [ -f "$UVC_GEN_DIR/pyproject.toml" ]; then
+        echo "Installing uvc_gen dependencies (jinja2, rich)..."
+        pip3 install jinja2 rich 2>/dev/null || pip install jinja2 rich 2>/dev/null || true
     fi
 else
     echo "⚠️  Python3 未安装，uvc_gen 将无法使用"
