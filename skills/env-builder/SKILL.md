@@ -39,7 +39,7 @@ Determine which flow to use based on the user's request:
 Triggers: "create", "build", "new UVC", "new component", "reusable package", "from scratch"
 
 ### Iteration Flow — Template iteration and completion
-Triggers: "模板缺少", "需要添加", "基于模板扩展", "template missing", "add to template", "extend template"
+Triggers: "template missing", "add to template", "extend template"
 
 ### Light Flow — Small modification, feature addition, bug fix
 Triggers: "add", "fix", "modify", "update", "change", "enhance", "extend"
@@ -64,48 +64,48 @@ Identify the component type from the user's request:
 - reusable SV package
 - protocol-independent utility library
 
-### Step 1.2: 推断 uvc_gen 参数
+### Step 2: Infer uvc_gen Parameters
 
-根据用户描述自动推断 uvc_gen 参数：
+Automatically infer uvc_gen parameters from the user's description:
 
-1. **uvc_name**：从用户描述中提取协议名称（如 AHB、SPI、AXI 等）
-2. **mode**：
-   - 如果用户提到 "master/slave"、"mstslv"、"主从" 等，使用 mstslv 模式
-   - 否则默认使用 single 模式
-3. **agent_num**（single 模式）：
-   - 如果用户提到 "多个 agent"、"多实例" 等，询问具体数量
-   - 否则默认为 1
-4. **mst_num/slv_num**（mstslv 模式）：
-   - 如果用户指定了数量，使用指定值
-   - 否则默认各为 1
-5. **可选组件**：
-   - 如果用户提到 "coverage"、"覆盖率"，启用 --with-coverage
-   - 如果用户提到 "scoreboard"、"记分板"，启用 --with-scoreboard
-   - 如果用户提到 "ref_model"、"参考模型"，启用 --with-ref-model
-   - 如果用户提到 "env"、"环境"，启用 --with-env
+1. **uvc_name**: Extract the protocol name from the user's description (e.g., AHB, SPI, AXI, etc.)
+2. **mode**:
+   - If the user mentions "master/slave", "mstslv", etc., use mstslv mode
+   - Otherwise, default to single mode
+3. **agent_num** (single mode):
+   - If the user mentions "multiple agents", "multi-instance", etc., ask for the specific number
+   - Otherwise, default to 1
+4. **mst_num/slv_num** (mstslv mode):
+   - If the user specifies a number, use the specified value
+   - Otherwise, default to 1 for each
+5. **Optional components**:
+   - If the user mentions "coverage", enable --with-coverage
+   - If the user mentions "scoreboard", enable --with-scoreboard
+   - If the user mentions "ref_model", enable --with-ref-model
+   - If the user mentions "env", enable --with-env
 
-### Step 1.5: 检测 uvc_gen 可用性
+### Step 3: Check uvc_gen Availability
 
-检查 skill 目录下 `tools/uvc_gen/uvc_gen.py` 是否存在：
+Check whether `tools/uvc_gen/uvc_gen.py` exists in the skill directory:
 
-- **如果存在**：继续下一步
-- **如果不存在**：提示用户安装
+- **If exists**: Proceed to the next step
+- **If not exists**: Prompt the user to install
 
-**提示信息：**
+**Prompt message:**
 ```
-uvc_gen 未安装。请运行以下命令安装：
+uvc_gen is not installed. Please run the following command to install:
 
-cd <skill目录> && bash install.sh
+cd <skill_dir> && bash install.sh
 
-其中 <skill目录> 可以通过以下方式找到：
+Where <skill_dir> can be found via:
 - Claude Code: ~/.claude/skills/ic-verifier
 - Codex: ~/.codex/skills/ic-verifier
 - Cursor: ~/.cursor/skills/ic-verifier
 
-或者使用 npx skills 安装后显示的路径。
+Or use the path displayed after installing via npx skills.
 ```
 
-### Step 2: Requirements Clarification
+### Step 4: Requirements Clarification
 
 Read `~/.claude/skills/ic-verifier/skills/env-builder/references/requirements-template.md`.
 
@@ -116,12 +116,12 @@ Ask the user questions from the template, filtered by component type. Ask 3-5 qu
 - What are the key behaviors?
 - What is the verification completion criteria?
 
-### Step 2.5: 生成 UVC 模板
+### Step 5: Generate UVC Template
 
-使用 uvc_gen 生成初始模板：
+Use uvc_gen to generate the initial template:
 
 ```bash
-# 构建命令
+# Build command
 python3 tools/uvc_gen/uvc_gen.py \
     -n {uvc_name} \
     -m {mode} \
@@ -136,20 +136,20 @@ python3 tools/uvc_gen/uvc_gen.py \
     [--with-env]
 ```
 
-**参数说明：**
-- `{uvc_name}`：协议名称
-- `{mode}`：生成模式（single 或 mstslv）
-- `{user_project_dir}`：用户当前项目目录
-- `{agent_num}`：agent 数量（single 模式）
-- `{mst_num}`：master agent 数量（mstslv 模式）
-- `{slv_num}`：slave agent 数量（mstslv 模式）
+**Parameter descriptions:**
+- `{uvc_name}`: Protocol name
+- `{mode}`: Generation mode (single or mstslv)
+- `{user_project_dir}`: User's current project directory
+- `{agent_num}`: Number of agents (single mode)
+- `{mst_num}`: Number of master agents (mstslv mode)
+- `{slv_num}`: Number of slave agents (mstslv mode)
 
-**生成后操作：**
-1. 读取生成的模板代码
-2. 分析模板结构和代码风格
-3. 继续后续的规格说明、计划和实现步骤
+**Post-generation actions:**
+1. Read the generated template code
+2. Analyze template structure and code style
+3. Continue with subsequent specification, planning, and implementation steps
 
-### Step 3: Write Spec
+### Step 6: Write Spec
 
 Read `~/.claude/skills/ic-verifier/skills/env-builder/references/spec-template.md`.
 
@@ -164,7 +164,7 @@ Produce a spec document covering:
 
 Present the spec to the user for approval before proceeding.
 
-### Step 4: Write Implementation Plan
+### Step 7: Write Implementation Plan
 
 Read `~/.claude/skills/ic-verifier/skills/env-builder/references/plan-template.md`.
 
@@ -177,7 +177,7 @@ Produce a plan with:
 
 Present the plan to the user for approval before proceeding.
 
-### Step 5: Define Verification Strategy
+### Step 8: Define Verification Strategy
 
 Before writing any code, define how each piece will be verified.
 
@@ -216,7 +216,7 @@ When adding concurrent assertions, be aware that:
 - Always use comprehensive verification (`make verify`) for final verification
 - Check `~/.claude/skills/ic-verifier/knowledge/assertion-verification.md` for details
 
-### Step 6: Incremental Implementation
+### Step 9: Incremental Implementation
 
 Implement in small steps following the plan:
 - One logical unit at a time
@@ -226,7 +226,7 @@ Implement in small steps following the plan:
 - Do not generate unused API
 - Keep public API stable and explainable
 
-### Step 7: Review
+### Step 10: Review
 
 Read `~/.claude/skills/ic-verifier/knowledge/review-framework.md`.
 
@@ -234,8 +234,8 @@ Review the implementation against:
 - `~/.claude/skills/ic-verifier/knowledge/coding-standards.md`
 - `~/.claude/skills/ic-verifier/knowledge/uvc-construction.md` (for UVC/agent/driver/monitor patterns)
 - `~/.claude/skills/ic-verifier/knowledge/design-patterns.md` (for factory/config_db/TLM/reset patterns)
-- The spec produced in Step 3
-- The verification strategy from Step 5
+- The spec produced in Step 6
+- The verification strategy from Step 8
 
 Produce structured review output:
 ```
@@ -259,7 +259,7 @@ Suggested next actions:
 
 If verdict is `changes-required`, fix issues and re-review. Loop until `pass` or `pass-with-nits`.
 
-### Step 8: Loop Convergence
+### Step 11: Loop Convergence
 
 After review, verify all completion criteria:
 - [ ] All spec requirements met
@@ -279,45 +279,45 @@ Exit conditions:
 
 ## Iteration Flow
 
-当 uvc_gen 生成的初始模板不完全满足需求时，使用此流程进行迭代优化。
+Use this flow when the initial template generated by uvc_gen does not fully meet requirements, and iterative refinement is needed.
 
-### 适用场景
+### Applicable Scenarios
 
-- 用户反馈"模板缺少 xxx"
-- 用户反馈"需要添加 xxx 功能"
-- 用户反馈"基于这个模板扩展"
+- User reports "template is missing xxx"
+- User reports "need to add xxx functionality"
+- User reports "extend based on this template"
 
-### Step 1: 分析现有模板
+### Step 1: Analyze Existing Template
 
-读取已生成的 UVC 文件，识别：
-- 缺失的组件或功能
-- 需要扩展的部分
-- 代码风格和命名规范
+Read the generated UVC files and identify:
+- Missing components or functionality
+- Parts that need to be extended
+- Code style and naming conventions
 
-### Step 2: 制定补全计划
+### Step 2: Create Completion Plan
 
-根据分析结果，制定补全计划：
-- 参考 uvc_gen 的模板风格
-- 保持命名约定一致性
-- 遵循 UVM 方法学
+Based on the analysis results, create a completion plan:
+- Follow the template style of uvc_gen
+- Maintain naming convention consistency
+- Follow UVM methodology
 
-### Step 3: 实施补全
+### Step 3: Implement Completion
 
-基于模板进行补全：
-- 补充缺失的组件（如 scoreboard、coverage 等）
-- 扩展已有组件的功能
-- 保持代码风格一致性
+Based on the template, perform the completion:
+- Add missing components (e.g., scoreboard, coverage, etc.)
+- Extend existing component functionality
+- Maintain code style consistency
 
-### Step 4: 验证结果
+### Step 4: Verify Results
 
-检查补全结果：
-- 编译检查
-- 基本功能测试
-- 代码风格审查
+Check the completion results:
+- Compile check
+- Basic functionality test
+- Code style review
 
-### Step 5: 交付
+### Step 5: Deliver
 
-将补全后的代码交付给用户，并说明修改内容。
+Deliver the completed code to the user and explain the changes made.
 
 ## Light Flow
 
@@ -367,7 +367,7 @@ One test → one fix → verify → repeat.
 
 ### Step 5: Review
 
-Same as Full Flow Step 7. Review against coding standards and the modification summary.
+Same as Full Flow Step 10. Review against coding standards and the modification summary.
 
 ### Step 6: Verify Completion
 
@@ -399,7 +399,7 @@ Review the code against:
 - API design
 - Verification completeness (if test files are available)
 
-Produce structured review output (same format as Full Flow Step 7).
+Produce structured review output (same format as Full Flow Step 10).
 
 ### Step 3: Report
 

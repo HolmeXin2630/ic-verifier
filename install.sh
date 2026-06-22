@@ -45,7 +45,7 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
     fi
 done
 
-# 安装 uvc_gen 依赖
+# Install uvc_gen
 UVC_GEN_REPO="https://github.com/HolmeXin2630/uvc_gen.git"
 UVC_GEN_BRANCH="main"
 UVC_GEN_DIR="$REPO_DIR/tools/uvc_gen"
@@ -62,23 +62,27 @@ if [ ! -d "$UVC_GEN_DIR" ]; then
         echo "  Continuing without uvc_gen..."
         UVC_GEN_CLONE_FAILED=true
     else
-        echo "✅ uvc_gen 已安装到 $UVC_GEN_DIR"
+        echo "uvc_gen installed to $UVC_GEN_DIR"
     fi
 else
-    echo "✅ uvc_gen 已存在，跳过安装"
+    echo "uvc_gen already exists, skipping installation"
 fi
 
-# 检查 Python 依赖
+# Install Python dependencies
+# NOTE: We hardcode the two required packages (jinja2, rich) rather than
+# parsing pyproject.toml, because pyproject.toml may specify version ranges
+# or extras that are not needed at install time. This keeps the installer
+# simple and avoids requiring additional tools (e.g., pip's pyproject parser).
 if [ "${UVC_GEN_CLONE_FAILED:-false}" = "true" ]; then
-    echo "⚠️  uvc_gen 克隆失败，跳过依赖安装"
+    echo "WARNING: uvc_gen clone failed, skipping dependency installation"
 elif command -v python3 &> /dev/null; then
-    echo "✅ Python3 已安装"
+    echo "Python3 is installed"
     if [ -f "$UVC_GEN_DIR/pyproject.toml" ]; then
         echo "Installing uvc_gen dependencies (jinja2, rich)..."
         pip3 install jinja2 rich 2>/dev/null || pip install jinja2 rich 2>/dev/null || true
     fi
 else
-    echo "⚠️  Python3 未安装，uvc_gen 将无法使用"
+    echo "WARNING: Python3 is not installed, uvc_gen will not be available"
 fi
 
 echo ""
