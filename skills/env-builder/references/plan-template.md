@@ -1,40 +1,20 @@
-# [Component Name] Implementation Plan
+# [Component Name] Plan
 
-## Files to Create/Modify
+## Files
 
 | File | Action | Description |
 |------|--------|-------------|
-| my_component.sv | Create | Main component class |
-| my_component_pkg.sv | Create | Package file |
-| my_transaction.sv | Create | Transaction class |
 
-## Implementation Steps
+## Steps
 
-### Step 1: [Step Name]
-
-**What:** Description of what this step does.
-**Files:** `path/to/file.sv`
-**Verification:** How to verify this step is correct.
-**Risk:** What could go wrong.
-
+### Step 1: [Name]
+**What:** ...
+**Files:** `path`
+**Verification:** L0/L1/L2
 - [ ] Implement
-- [ ] Verify (compile / elaborate / simulate)
-- [ ] Review checkpoint
+- [ ] Verify
 
-### Step 2: [Step Name]
+## Risks
 
-...
-
-## Risk Assessment
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| Interface mismatch | Medium | High | Verify interface first |
-| Phase ordering | Low | Medium | Follow UVM cookbook |
-
-## Review Checkpoints
-
-After which steps should review agent be invoked?
-- After step N: first compilable version
-- After step M: first simulation-ready version
-- After step P: final version before handoff
+| Risk | Impact | Mitigation |
+|------|--------|------------|
