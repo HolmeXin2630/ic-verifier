@@ -58,4 +58,5 @@ Cross-references updated accordingly:
 
 ## Commit
 
-Pending: changes will be committed as `fix: translate Iteration Flow to English and fix step numbering in SKILL.md`
+Committed as `b4b273d` on branch `feature/uvc-gen-integration`:
+`fix: translate Iteration Flow to English and fix step numbering in SKILL.md`
