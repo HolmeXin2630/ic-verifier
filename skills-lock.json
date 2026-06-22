@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/env-builder/SKILL.md",
       "computedHash": "31f4bfedef2cd243628bbbda420ba2998ff97c0243da75c5f96df01c2e4455f4"
+    },
+    "setup-ic-verifier": {
+      "source": "HolmeXin2630/ic-verifier",
+      "sourceType": "github",
+      "skillPath": "skills/setup-ic-verifier/SKILL.md",
+      "computedHash": "b013103decd46f6c38cc79befe2bb515f09f1cfe3a9fef6a937709447dc5ee14"
     }
   }
 }
