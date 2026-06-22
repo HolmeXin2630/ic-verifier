@@ -17,45 +17,45 @@ This is a prompt-driven skill, not a deterministic script. Explore, present what
 
 ### 1. Explore
 
-Look at the current environment to understand its starting state:
+Look at the current environment:
 
-- Check if `~/.claude/skills/env-builder` exists (npx installation)
-- Check if `~/.claude/skills/ic-verifier` exists (knowledge base)
-- Check if `knowledge/` directory exists in the skill location
-- Check if `tools/uvc_gen/` exists in the skill location
+- Check if `~/.agents/skills/env-builder/` exists
+- Check if `~/.agents/skills/ic-verifier/knowledge/` exists and has files
+- Check if `~/.agents/skills/env-builder/knowledge` is a symlink pointing to `../ic-verifier/knowledge`
+- Check if uvc_gen is installed (search for `uvc_gen.py` in common locations)
 
 ### 2. Present findings and ask
 
-Summarise what's present and what's missing. Then walk the user through the setup **one step at a time**.
+Summarise what's present and what's missing. Walk the user through setup **one step at a time**.
 
 **Section A — Knowledge base symlink.**
 
-> Explainer: The knowledge base contains shared coding standards, design patterns, UVC construction guides, and review frameworks. These files are used by multiple skills (env-builder, future testplan, coverage, formal). Creating a symlink allows all skills to access the same knowledge base.
+The knowledge base contains shared coding standards, design patterns, UVC construction guides, and review frameworks. Creating a symlink allows all skills to access the same knowledge base without duplication.
 
-Check if the knowledge base is already accessible:
-- If `~/.claude/skills/ic-verifier/knowledge/` exists and contains files, the knowledge base is already set up
-- If not, create the symlink
+Check: does `~/.agents/skills/env-builder/knowledge` exist as a symlink to `../ic-verifier/knowledge`?
+
+- If yes and the target has files → knowledge is set up
+- If the directory exists but is NOT a symlink → needs migration (back up files, create symlink)
+- If missing → create the symlink
 
 **Section B — uvc_gen tool.**
 
-> Explainer: uvc_gen is a Python tool that generates UVC templates. It's required for the env-builder skill to create new components.
+uvc_gen is a Python tool that generates UVC templates. Required for the env-builder skill when creating UVC/VIP components.
 
-Check if uvc_gen is already installed:
-- If `tools/uvc_gen/uvc_gen.py` exists, uvc_gen is already installed
-- If not, clone it from GitHub
+Search for `uvc_gen.py` in:
+1. `~/.agents/skills/ic-verifier/tools/uvc_gen/uvc_gen.py`
+2. `~/.agents/skills/env-builder/tools/uvc_gen/uvc_gen.py`
+
+If not found, clone it.
 
 **Section C — Python dependencies.**
 
-> Explainer: uvc_gen requires Python 3 with jinja2 and rich packages.
-
-Check if dependencies are installed:
-- If Python 3 is available and packages are installed, skip
-- If not, install them
+uvc_gen requires Python 3 with jinja2 and rich packages.
 
 ### 3. Confirm and execute
 
 Show the user what will be done:
-- Create symlink: `~/.claude/skills/ic-verifier` → skill repository
+- Create symlink: `~/.agents/skills/env-builder/knowledge` → `../ic-verifier/knowledge`
 - Clone uvc_gen: `git clone https://github.com/HolmeXin2630/uvc_gen.git`
 - Install dependencies: `pip3 install jinja2 rich`
 
@@ -66,18 +66,23 @@ Let them confirm before proceeding.
 **Step A: Create knowledge base symlink**
 
 ```bash
-# Find the skill installation directory
-SKILL_DIR="$(dirname "$(readlink -f ~/.claude/skills/env-builder)")"
+# Ensure shared knowledge directory exists
+mkdir -p ~/.agents/skills/ic-verifier/knowledge
 
-# Create symlink to repository root (parent of skills/)
-ln -sf "$SKILL_DIR/../.." ~/.claude/skills/ic-verifier
+# If env-builder has a real directory (not symlink), migrate files first
+if [ -d ~/.agents/skills/env-builder/knowledge ] && [ ! -L ~/.agents/skills/env-builder/knowledge ]; then
+    cp ~/.agents/skills/env-builder/knowledge/*.md ~/.agents/skills/ic-verifier/knowledge/
+    rm -rf ~/.agents/skills/env-builder/knowledge
+fi
+
+# Create symlink
+ln -sf ../ic-verifier/knowledge ~/.agents/skills/env-builder/knowledge
 ```
 
 **Step B: Install uvc_gen**
 
 ```bash
-# Clone uvc_gen into the skill repository
-cd ~/.claude/skills/ic-verifier
+cd ~/.agents/skills/ic-verifier
 git clone --depth 1 https://github.com/HolmeXin2630/uvc_gen.git tools/uvc_gen
 ```
 
@@ -89,8 +94,8 @@ pip3 install jinja2 rich
 
 ### 5. Done
 
-Tell the user the setup is complete and the env-builder skill can now access:
-- Knowledge base: `~/.claude/skills/ic-verifier/knowledge/`
-- uvc_gen tool: `~/.claude/skills/ic-verifier/tools/uvc_gen/`
+Tell the user the setup is complete. The env-builder skill can now access:
+- Knowledge base: `~/.agents/skills/env-builder/knowledge/` (symlink to shared directory)
+- uvc_gen tool: `~/.agents/skills/ic-verifier/tools/uvc_gen/`
 
 Mention they can re-run `/setup-ic-verifier` if they need to update the knowledge base or uvc_gen tool.
