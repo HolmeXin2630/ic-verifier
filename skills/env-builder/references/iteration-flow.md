@@ -16,13 +16,11 @@ Create completion plan following uvc_gen's template style. Define verification f
 
 Add missing components. Extend existing functionality. Maintain style consistency.
 
-## Step 4: Review
+## Step 4: Review Agent
 
-Read `knowledge/review-framework.md`. Review against:
-- `knowledge/coding-standards.md`
-- `knowledge/uvc-construction.md`
+Read `references/review-agent-prompt.md`. Spawn review sub-agent with all modified file paths.
 
-Output: Verdict + findings. Fix any changes-required.
+Sub-agent returns findings → fix changes-required → re-review if needed (max 2 rounds).
 
 ## Step 5: Verify & Deliver
 

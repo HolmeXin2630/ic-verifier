@@ -61,16 +61,18 @@ Non-runnable environment: report honestly what was verified and what was not.
 
 One logical unit at a time. Verify each step before next. Follow UVM Cookbook practices.
 
-## Step 8: Review
+## Step 8: Review Agent
 
-Read `knowledge/review-framework.md` for verdict format. Review against:
-- `knowledge/coding-standards.md` (naming, style)
-- `knowledge/uvc-construction.md` (UVC/agent/driver/monitor patterns)
-- `knowledge/design-patterns.md` (factory, config_db, TLM, reset)
+Read `references/review-agent-prompt.md` for the sub-agent prompt template.
 
-Output: Verdict (pass/pass-with-nits/changes-required/blocked) + findings per category.
+Spawn a review sub-agent: fill in `{file_list}` with all generated/modified file paths, call Agent tool with the filled prompt.
 
-If changes-required: fix and re-review. Loop until pass.
+The sub-agent will read shared knowledge files and return structured findings.
+
+After sub-agent returns:
+- **pass / pass-with-nits** → proceed to Step 9
+- **changes-required** → fix blocking findings, re-spawn review-agent (max 2 re-reviews)
+- **blocked** → report to user, wait for decision
 
 ## Step 9: Convergence
 

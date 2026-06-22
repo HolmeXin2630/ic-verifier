@@ -30,9 +30,11 @@ RED → write failing test. GREEN → minimal code to pass. VERIFY → run verif
 
 One test → one fix → verify → repeat.
 
-## Step 5: Review
+## Step 5: Review Agent
 
-Read `knowledge/review-framework.md`. Review against `knowledge/coding-standards.md` and modification summary.
+Read `references/review-agent-prompt.md`. Spawn review sub-agent with all modified file paths.
+
+Sub-agent returns findings → fix changes-required → re-review if needed (max 2 rounds).
 
 ## Step 6: Verify Completion
 
