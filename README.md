@@ -20,8 +20,10 @@ No more AI-generated code that "looks like UVM" but doesn't actually work.
 一条命令搞定：
 
 ```bash
-npx skills add HolmeXin2630/ic-verifier
+npx skills add HolmeXin2630/ic-verifier -g
 ```
+
+`-g` 表示全局安装（所有项目可用）。省略 `-g` 则仅当前项目可用。
 
 支持 68+ 种 AI coding agents，包括 Claude Code、Codex、Cursor、GitHub Copilot、Gemini CLI、Windsurf、Cline 等。
 
