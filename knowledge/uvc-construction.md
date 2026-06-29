@@ -265,7 +265,7 @@ endtask
 ### Key Patterns
 
 - **VIF from config:** `vif = cfg.vif` in `build_phase` — config_db get is done by agent, not driver
-- **`run()` not `run_phase`:** Agent calls `run()` from its `run_phase`, allowing per-agent lifecycle control
+- **`run()` not `run_phase`:** Driver/Monitor use `run()` task (called by inherited `run_phase`), agent has no `run_phase`
 - **`vif.reset_driver_signal()`:** Reset cleanup logic lives in interface module, not in driver
 - **`extern` declarations:** Declare in class body, implement outside — improves readability
 
@@ -561,7 +561,7 @@ endclass
 | Coverage enable/disable                    | Config object         |
 | Transaction type                           | Factory override      |
 | Driver type                                | Factory override      |
-| Virtual interface                          | config_db             |
+| Virtual interface                          | config 对象（agent 通过 config_db 获取后存入 cfg.vif）|
 | Test-specific stimulus constraints         | Sequence (rand vars)  |
 
 ## Coverage Integration

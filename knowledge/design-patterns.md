@@ -449,7 +449,7 @@ endtask
 ```
 
 **Key Points:**
-- **`run()` not `run_phase`:** Agent calls `run()` from its `run_phase`, allowing per-agent lifecycle control
+- **`run()` not `run_phase`:** Driver/Monitor use `run()` task (called by inherited `run_phase`), agent has no `run_phase`
 - **`vif.mrst_n`:** Active-low reset signal, named `mrst_n` in interface
 - **`vif.reset_driver_signal()`:** Reset cleanup logic lives in interface module, not in driver
 - **`forever begin...end` loop:** Continuously detects reset and restarts driving

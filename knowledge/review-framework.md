@@ -108,7 +108,7 @@ endclass
 - [ ] Driver/Monitor 使用 `run()` 方法，不是 `run_phase`
 - [ ] VIF 通过 config 对象传递，不是直接声明
 - [ ] Analysis port 命名为 `broadcaster`，在 `new()` 中创建
-- [ ] Agent 使用 `run_phase` 控制组件生命周期
+- [ ] Agent 只有 build_phase/connect_phase，无 run_phase（driver/monitor 自管理生命周期）
 - [ ] 使用 `extern` 声明分离接口和实现
 
 #### 3. UVM 方法论 (Methodology)
