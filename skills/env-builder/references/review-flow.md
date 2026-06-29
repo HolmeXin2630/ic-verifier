@@ -52,6 +52,73 @@ Review against: UVM methodology, coding standards, API design, verification comp
 
 Output: Verdict (pass/pass-with-nits/changes-required/blocked) + findings per category.
 
-## Step 3: Report
+## Step 3: Generate Annotation HTML
 
-Present findings. Do NOT modify code unless explicitly asked.
+Read the template file: `references/review-annotation-template.html`
+
+For each finding, generate the HTML block below. Replace placeholders:
+
+```html
+<div class="finding" data-id="{{ID}}" data-title="{{TITLE}}">
+    <div class="finding-header">
+        <span class="severity {{SEVERITY_CLASS}}">{{SEVERITY}}</span>
+        <span class="category">{{CATEGORY}}</span>
+        <span class="title">{{TITLE}}</span>
+        <span class="count">{{FILE}}:{{LINE}}</span>
+    </div>
+    <div class="finding-body">
+        <div class="detail">
+            <strong>Location:</strong> {{LOCATION}}<br>
+            <strong>Issue:</strong> {{ISSUE}}<br>
+            <strong>Why:</strong> {{WHY}}<br>
+            <strong>Fix:</strong> {{FIX}}
+        </div>
+        <div class="annotation">
+            <label>动作</label>
+            <div class="btn-group">
+                <button class="btn" data-action="fix" onclick="setAction(this)">🔧 Fix</button>
+                <button class="btn" data-action="skip" onclick="setAction(this)">⏭️ Skip</button>
+                <button class="btn" data-action="defer" onclick="setAction(this)">⏳ Defer</button>
+                <button class="btn" data-action="discuss" onclick="setAction(this)">💬 Discuss</button>
+                <button class="btn" data-action="disagree" onclick="setAction(this)">❌ Disagree</button>
+            </div>
+            <label>备注</label>
+            <textarea class="comment" placeholder="补充说明..."></textarea>
+        </div>
+    </div>
+</div>
+```
+
+Severity mapping:
+- blocking → `severity blocking`, label "Blocking"
+- non-blocking → `severity non-blocking`, label "Non-Blocking"
+- info → `severity info`, label "Info"
+
+In the template HTML, replace:
+- `{{UVC_NAME}}` → UVC/component name
+- `{{FINDING_COUNT}}` → total number of findings
+- `{{VERDICT}}` → initial verdict
+- `{{FINDINGS_HTML}}` → concatenation of all finding HTML blocks
+
+Add this script block before `</script>` to handle action button clicks:
+
+```javascript
+function setAction(btn) {
+    btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+```
+
+Save the generated HTML to the target UVC directory: `<uvc_path>/review_annotations.html`
+
+**IMPORTANT:** After saving the HTML file, tell the user:
+1. The file path
+2. Open it in a browser, annotate each finding (Fix/Skip/Defer/Discuss/Disagree + comments)
+3. Click "💾 导出为 review.md" — it will save `review.md` to the same directory as the HTML
+4. After exporting, tell Claude to read the review.md for the next step
+
+## Step 4: Report
+
+Present findings summary to user. Do NOT modify code unless explicitly asked.
+
+Wait for user to complete annotation and export, then read the exported `review.md` to proceed.
